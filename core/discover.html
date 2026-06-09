@@ -1,0 +1,65 @@
+<script type="text/javascript">
+    RED.nodes.registerType('matterDiscover', {
+        category: 'matter',
+        color: '#a6d8e8',
+        defaults: {
+            name: { value: '' },
+            controller: { value: '', type: 'matterController', required: true },
+            format: { value: 'hal2' },
+            eventHandlerId: { value: '' },
+            filter: { value: '' }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: 'parser-json.svg',
+        label: function () {
+            return this.name || 'matter discover';
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="matterDiscover">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-controller"><i class="fa fa-globe"></i> Controller</label>
+        <input type="text" id="node-input-controller">
+    </div>
+    <div class="form-row">
+        <label for="node-input-format"><i class="fa fa-cog"></i> Format</label>
+        <select id="node-input-format">
+            <option value="hal2">hal2 (importerbar Node-RED-flow-snippet)</option>
+            <option value="summary">summary (per-nod metadata)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-eventHandlerId"><i class="fa fa-link"></i> EventHandler ID</label>
+        <input type="text" id="node-input-eventHandlerId" placeholder="(för hal2-format) — ID på din hal2EventHandler">
+    </div>
+    <div class="form-row">
+        <label for="node-input-filter"><i class="fa fa-filter"></i> NodeId filter</label>
+        <input type="text" id="node-input-filter" placeholder="(blank = alla noder)">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="matterDiscover">
+    <p>Emittar en importerbar JSON-snippet med <code>hal2Thing</code> + <code>hal2ThingType</code>-configs
+    för alla commissionerade Matter-noder.</p>
+    <p>Använd så här:</p>
+    <ol>
+        <li>Koppla en inject → matterDiscover → debug.</li>
+        <li>Tryck inject, kopiera JSON-arrayen från debug-panelen.</li>
+        <li>Öppna Import-dialogen i Node-RED-editorn (<code>Ctrl+I</code>), välj "Clipboard", klistra in.</li>
+        <li>Granska de nya noderna, Deploy.</li>
+    </ol>
+    <p>Templates läses från controller-nodens templates-katalog (bundlade + override).
+    Genererade ThingType-configs är helt självinneslutna — lokala ingress/egress-funktioner,
+    inga ändringar i hal2EventHandler-bibban behövs.</p>
+    <p><b>EventHandler ID</b>: krävs för hal2-format. Slå upp ID:t på din hal2EventHandler config-nod
+    i Node-RED-editorn (visas i URL:en när du editerar den).</p>
+    <p>Output (hal2): <code>msg.payload</code> = array av flow-noder, <code>msg.summary</code> = lista per nod,
+    <code>msg.skipped</code> = noder som hoppas över med skäl.</p>
+    <p>Output (summary): <code>msg.payload</code> = lista <code>[{node_id, vendor, product, shape, suggested_thingtype}]</code>.</p>
+</script>

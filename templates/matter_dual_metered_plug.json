@@ -1,0 +1,59 @@
+{
+  "id": "matter_dual_metered_plug_thingtype",
+  "name": "Matter Dual Metered Plug",
+  "shape": "(1,266+meter),(2,266+meter)",
+  "nodestatus": "🔌 1: %On1% ⚡ %Power1%W | 2: %On2% ⚡ %Power2%W",
+  "items": [
+    {
+      "name": "On1",
+      "id": "mdmp_on1",
+      "endpoint": 1,
+      "cluster": 6,
+      "attr": 0,
+      "haType": "switch",
+      "ingress": "Pass-through",
+      "egress": "Matter OnOff"
+    },
+    {
+      "name": "Power1",
+      "id": "mdmp_power1",
+      "endpoint": 1,
+      "cluster": 144,
+      "attr": 8,
+      "haType": "power",
+      "ingress": "Matter milli → unit",
+      "readOnly": true,
+      "notes": "ElectricalPowerMeasurement.ActivePower channel 1, mW."
+    },
+    {
+      "name": "On2",
+      "id": "mdmp_on2",
+      "endpoint": 2,
+      "cluster": 6,
+      "attr": 0,
+      "haType": "switch",
+      "ingress": "Pass-through",
+      "egress": "Matter OnOff"
+    },
+    {
+      "name": "Power2",
+      "id": "mdmp_power2",
+      "endpoint": 2,
+      "cluster": 144,
+      "attr": 8,
+      "haType": "power",
+      "ingress": "Matter milli → unit",
+      "readOnly": true,
+      "notes": "ElectricalPowerMeasurement.ActivePower channel 2, mW."
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter milli → unit", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(v / 10) / 100;" }
+    ],
+    "egress": [
+      { "name": "Matter OnOff", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 6,\n    command: msg.payload ? 'On' : 'Off'\n};\nreturn msg;" }
+    ]
+  }
+}

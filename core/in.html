@@ -1,0 +1,52 @@
+<script type="text/javascript">
+    RED.nodes.registerType('matterIn', {
+        category: 'matter',
+        color: '#a6d8e8',
+        defaults: {
+            name: { value: '' },
+            controller: { value: '', type: 'matterController', required: true },
+            format: { value: 'hal2' },
+            topicFilter: { value: '' },
+            nodeIdFilter: { value: '' }
+        },
+        inputs: 0,
+        outputs: 1,
+        icon: 'inject.svg',
+        label: function () {
+            return this.name || 'matter in';
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="matterIn">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-controller"><i class="fa fa-globe"></i> Controller</label>
+        <input type="text" id="node-input-controller">
+    </div>
+    <div class="form-row">
+        <label for="node-input-format"><i class="fa fa-cog"></i> Format</label>
+        <select id="node-input-format">
+            <option value="hal2">hal2 (topic + payload + msg.matter)</option>
+            <option value="raw">raw (rå event-data)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-topicFilter"><i class="fa fa-filter"></i> Topic filter</label>
+        <input type="text" id="node-input-topicFilter" placeholder="matter/42/# (blank = alla)">
+    </div>
+    <div class="form-row">
+        <label for="node-input-nodeIdFilter"><i class="fa fa-filter"></i> NodeId filter</label>
+        <input type="text" id="node-input-nodeIdFilter" placeholder="(blank = alla)">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="matterIn">
+    <p>Emittar attribute-uppdateringar och node-events från matterjs-server som Node-RED-msgs.</p>
+    <p><b>hal2-format</b>: <code>msg.topic = matter/{nodeId}/{ep}/{cluster}/{attr}</code>,
+    <code>msg.payload = nytt värde</code>, <code>msg.matter = {nodeId, endpoint, cluster, attribute, kind}</code>.</p>
+    <p>Topic filter stödjer MQTT-wildcards: <code>+</code> (en nivå) och <code>#</code> (resten).</p>
+</script>

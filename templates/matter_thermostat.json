@@ -1,0 +1,54 @@
+{
+  "id": "matter_thermostat_thingtype",
+  "name": "Matter Thermostat",
+  "shape": "(1,769)",
+  "nodestatus": "🌡 %Temperature%°C → %TargetTemp%°C [%SystemMode%]",
+  "items": [
+    {
+      "name": "Temperature",
+      "id": "mt_temp",
+      "endpoint": 1,
+      "cluster": 513,
+      "attr": 0,
+      "haType": "temperature",
+      "ingress": "Matter centi → unit",
+      "readOnly": true,
+      "notes": "LocalTemperature, 0.01 °C signed."
+    },
+    {
+      "name": "TargetTemp",
+      "id": "mt_target",
+      "endpoint": 1,
+      "cluster": 513,
+      "attr": 17,
+      "filterValue": "/513/(17|18)$",
+      "filterMatchType": "RegExp",
+      "haType": "target temperature",
+      "ingress": "Matter centi → unit",
+      "egress": "Matter Thermostat Setpoint",
+      "notes": "OccupiedHeatingSetpoint (17) eller UnoccupiedHeatingSetpoint (18) — Mill m.fl. anvander 18. Egress skriver bada via array."
+    },
+    {
+      "name": "SystemMode",
+      "id": "mt_mode",
+      "endpoint": 1,
+      "cluster": 513,
+      "attr": 28,
+      "haType": "ac mode",
+      "ingress": "Matter Thermostat SystemMode → string",
+      "egress": "Matter Thermostat Mode",
+      "notes": "SystemMode enum 0=off, 4=heat. Skrivs via write_attribute."
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Matter centi → unit", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn v / 100;" },
+      { "name": "Matter Thermostat SystemMode → string", "fn": "// Cluster 513 attribute 28 (SystemMode enum) → human str\nconst v = Number(msg.payload);\nif (!isFinite(v)) return null;\nconst MODES = { 0: 'off', 1: 'auto', 3: 'cool', 4: 'heat', 5: 'emergency_heat', 6: 'precooling', 7: 'fan_only', 8: 'dry', 9: 'sleep' };\nreturn MODES[v] || `unknown-${v}`;" },
+      { "name": "Pass-through", "fn": "return msg.payload;" }
+    ],
+    "egress": [
+      { "name": "Matter Thermostat Setpoint", "fn": "// hal2 publishCommand pa 'target temperature' ger msg.payload = number (°C).\n// Skriver BÅDE attr 17 (OccupiedHeatingSetpoint) OCH 18 (UnoccupiedHeatingSetpoint),\n// 0.01 °C per LSB. Anledning: enheter varierar i vilken attr de respekterar.\nconst tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst tempC = Number(msg.payload);\nif (!isFinite(tempC)) return null;\nconst value = Math.round(Math.max(0, Math.min(100, tempC)) * 100);\nconst nodeId = Number(tm[1]);\nconst endpoint = Number(tm[2]);\nmsg.payload = [\n    { kind: 'write_attribute', nodeId, endpoint, cluster: 513, attribute: 17, value },\n    { kind: 'write_attribute', nodeId, endpoint, cluster: 513, attribute: 18, value }\n];\nreturn msg;" },
+      { "name": "Matter Thermostat Mode", "fn": "// hal2 publishCommand pa 'ac mode' ger msg.payload = str ('off'/'heat'/'auto'/'cool'/...).\nconst tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst mode = String(msg.payload || '').toLowerCase();\nconst MODE_MAP = { 'off': 0, 'auto': 1, 'cool': 3, 'heat': 4, 'emergency_heat': 5, 'precooling': 6, 'fan_only': 7, 'dry': 8, 'sleep': 9 };\nconst value = MODE_MAP[mode];\nif (value === undefined) {\n    node.warn('Matter Thermostat Mode: okant mode ' + JSON.stringify(msg.payload));\n    return null;\n}\nmsg.payload = {\n    kind: 'write_attribute',\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 513,\n    attribute: 28,\n    value: value\n};\nreturn msg;" }
+    ]
+  }
+}

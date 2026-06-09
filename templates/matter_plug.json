@@ -1,0 +1,26 @@
+{
+  "id": "matter_plug_thingtype",
+  "name": "Matter Plug",
+  "shape": "(1,266)",
+  "nodestatus": "🔌 %On%",
+  "items": [
+    {
+      "name": "On",
+      "id": "mp_on",
+      "endpoint": 1,
+      "cluster": 6,
+      "attr": 0,
+      "haType": "switch",
+      "ingress": "Pass-through",
+      "egress": "Matter OnOff"
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" }
+    ],
+    "egress": [
+      { "name": "Matter OnOff", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 6,\n    command: msg.payload ? 'On' : 'Off'\n};\nreturn msg;" }
+    ]
+  }
+}

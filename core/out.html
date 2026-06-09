@@ -1,0 +1,40 @@
+<script type="text/javascript">
+    RED.nodes.registerType('matterOut', {
+        category: 'matter',
+        color: '#a6d8e8',
+        defaults: {
+            name: { value: '' },
+            controller: { value: '', type: 'matterController', required: true }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: 'arrow-in.svg',
+        align: 'right',
+        label: function () {
+            return this.name || 'matter out';
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="matterOut">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-controller"><i class="fa fa-globe"></i> Controller</label>
+        <input type="text" id="node-input-controller">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="matterOut">
+    <p>Skickar kommandon till matterjs-server via den officiella WS-klienten.</p>
+    <p><code>msg.payload</code> ska vara ett objekt (eller array av objekt):</p>
+    <pre>{ kind: 'device_command', nodeId, endpoint, cluster, command, args? }
+{ kind: 'write_attribute', nodeId, endpoint, cluster, attribute, value }
+{ kind: 'read_attribute',  nodeId, endpoint, cluster, attribute }</pre>
+    <p>Default-kind är <code>device_command</code> om inget anges.</p>
+    <p>För <code>write_attribute</code> emittas dessutom en optimistic <code>matter:attribute</code>-event
+    på controllern, så att Things-noder reagerar omedelbart även för enheter som inte själva pushar (Mill-mönstret).</p>
+    <p>Output: msg.payload = resultat från WS-anropet (eller array av resultat om input var array).</p>
+</script>

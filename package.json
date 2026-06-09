@@ -1,0 +1,33 @@
+{
+  "name": "node-red-contrib-matterjs-bridge",
+  "version": "0.1.0",
+  "description": "Node-RED bridge between matterjs-server (Matter-over-IP controller) and Node-RED flows. Built on the official @matter-server/ws-client.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flic/node-red-contrib-matterjs-bridge.git"
+  },
+  "keywords": [
+    "node-red",
+    "matter",
+    "matterjs-server",
+    "home-automation",
+    "iot"
+  ],
+  "author": "Fredrik Furtenbach",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "node-red": {
+    "version": ">=4.0.0",
+    "nodes": {
+      "matterController": "core/controller.js",
+      "matterIn": "core/in.js",
+      "matterOut": "core/out.js",
+      "matterDiscover": "core/discover.js"
+    }
+  },
+  "dependencies": {
+    "@matter-server/ws-client": "^1.0.0"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "id": "matter_air_quality_sensor_thingtype",
+  "name": "Matter Air Quality Sensor",
+  "shape": "(1,44)",
+  "nodestatus": "🌫 %AirQuality% 🌡 %Temperature%°C 💧 %Humidity%% CO₂ %CO2%ppm",
+  "items": [
+    {
+      "name": "AirQuality",
+      "id": "maqs_airquality",
+      "endpoint": 1,
+      "cluster": 91,
+      "attr": 0,
+      "haType": "sensor",
+      "ingress": "Pass-through",
+      "readOnly": true
+    },
+    {
+      "name": "Temperature",
+      "id": "maqs_temperature",
+      "endpoint": 1,
+      "cluster": 1026,
+      "attr": 0,
+      "haType": "temperature",
+      "ingress": "Matter centi → unit",
+      "readOnly": true
+    },
+    {
+      "name": "Humidity",
+      "id": "maqs_humidity",
+      "endpoint": 1,
+      "cluster": 1029,
+      "attr": 0,
+      "haType": "humidity",
+      "ingress": "Matter centi → unit",
+      "readOnly": true
+    },
+    {
+      "name": "CO2",
+      "id": "maqs_co2",
+      "endpoint": 1,
+      "cluster": 1037,
+      "attr": 0,
+      "haType": "co2",
+      "ingress": "Pass-through",
+      "readOnly": true
+    },
+    {
+      "name": "PM25",
+      "id": "maqs_pm25",
+      "endpoint": 1,
+      "cluster": 1066,
+      "attr": 0,
+      "haType": "sensor",
+      "ingress": "Pass-through",
+      "readOnly": true
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter centi → unit", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn v / 100;" }
+    ],
+    "egress": []
+  }
+}

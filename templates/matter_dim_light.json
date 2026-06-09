@@ -1,0 +1,38 @@
+{
+  "id": "matter_dim_light_thingtype",
+  "name": "Matter Dimmable Light",
+  "shape": "(1,257)",
+  "nodestatus": "💡 %On% (%Brightness%%)",
+  "items": [
+    {
+      "name": "On",
+      "id": "mdl_on",
+      "endpoint": 1,
+      "cluster": 6,
+      "attr": 0,
+      "haType": "light",
+      "ingress": "Pass-through",
+      "egress": "Matter OnOff"
+    },
+    {
+      "name": "Brightness",
+      "id": "mdl_brightness",
+      "endpoint": 1,
+      "cluster": 8,
+      "attr": 0,
+      "haType": "dimmer",
+      "ingress": "Matter Level 0-254 → 0-100",
+      "egress": "Matter Level"
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter Level 0-254 → 0-100", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(Math.max(0, Math.min(254, v)) * 100 / 254);" }
+    ],
+    "egress": [
+      { "name": "Matter OnOff", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 6,\n    command: msg.payload ? 'On' : 'Off'\n};\nreturn msg;" },
+      { "name": "Matter Level", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst pct = Math.max(0, Math.min(100, Number(msg.payload) || 0));\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 8,\n    command: 'MoveToLevelWithOnOff',\n    args: { level: Math.round(pct * 254 / 100), transitionTime: 0, optionsMask: 0, optionsOverride: 0 }\n};\nreturn msg;" }
+    ]
+  }
+}

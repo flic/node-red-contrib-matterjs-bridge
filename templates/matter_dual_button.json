@@ -1,0 +1,48 @@
+{
+  "id": "matter_dual_button_thingtype",
+  "name": "Matter Dual Button",
+  "shape": "(1,15),(2,15)",
+  "nodestatus": "🔘 1: %Button1% / 2: %Button2% 🔋 %Battery%%",
+  "items": [
+    {
+      "name": "Button1",
+      "id": "mdb_btn1",
+      "endpoint": 1,
+      "cluster": 59,
+      "attr": "_event",
+      "filterValue": "/1/59/_event/0",
+      "haType": "button",
+      "ingress": "Matter Switch event → press_type",
+      "readOnly": true
+    },
+    {
+      "name": "Button2",
+      "id": "mdb_btn2",
+      "endpoint": 2,
+      "cluster": 59,
+      "attr": "_event",
+      "filterValue": "/2/59/_event/0",
+      "haType": "button",
+      "ingress": "Matter Switch event → press_type",
+      "readOnly": true
+    },
+    {
+      "name": "Battery",
+      "id": "mdb_battery",
+      "endpoint": 0,
+      "cluster": 47,
+      "attr": 12,
+      "haType": "battery",
+      "ingress": "Matter halfpercent → percent",
+      "readOnly": true
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Matter Switch event → press_type", "fn": "const p = msg.payload;\nif (!p || typeof p !== 'object') return null;\nif (p.event_id === 4) return 'long';\nif (p.event_id === 6) {\n    const count = (p.data && p.data.totalNumberOfPressesCounted) || 1;\n    if (count === 1) return 'single';\n    if (count === 2) return 'double';\n    if (count === 3) return 'triple';\n    return `multi-${count}`;\n}\nreturn null;" },
+      { "name": "Matter halfpercent → percent", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(v / 2);" },
+      { "name": "Pass-through", "fn": "return msg.payload;" }
+    ],
+    "egress": []
+  }
+}

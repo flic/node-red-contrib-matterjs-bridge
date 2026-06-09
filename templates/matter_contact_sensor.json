@@ -1,0 +1,36 @@
+{
+  "id": "matter_contact_sensor_thingtype",
+  "name": "Matter Contact Sensor",
+  "shape": "(1,21)",
+  "nodestatus": "🚪 %Contact% 🔋 %Battery%%",
+  "items": [
+    {
+      "name": "Contact",
+      "id": "mcs_contact",
+      "endpoint": 1,
+      "cluster": 69,
+      "attr": 0,
+      "haType": "contact",
+      "ingress": "Pass-through",
+      "readOnly": true,
+      "notes": "BooleanState, true = closed."
+    },
+    {
+      "name": "Battery",
+      "id": "mcs_battery",
+      "endpoint": 0,
+      "cluster": 47,
+      "attr": 12,
+      "haType": "battery",
+      "ingress": "Matter halfpercent → percent",
+      "readOnly": true
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter halfpercent → percent", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(v / 2);" }
+    ],
+    "egress": []
+  }
+}

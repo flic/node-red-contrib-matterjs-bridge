@@ -1,0 +1,50 @@
+{
+  "id": "matter_ct_light_thingtype",
+  "name": "Matter Color Temperature Light",
+  "shape": "(1,268)",
+  "nodestatus": "💡 %On% (%Brightness%%) 🌡 %ColorTemp%%",
+  "items": [
+    {
+      "name": "On",
+      "id": "mctl_on",
+      "endpoint": 1,
+      "cluster": 6,
+      "attr": 0,
+      "haType": "light",
+      "ingress": "Pass-through",
+      "egress": "Matter OnOff"
+    },
+    {
+      "name": "Brightness",
+      "id": "mctl_brightness",
+      "endpoint": 1,
+      "cluster": 8,
+      "attr": 0,
+      "haType": "dimmer",
+      "ingress": "Matter Level 0-254 → 0-100",
+      "egress": "Matter Level"
+    },
+    {
+      "name": "ColorTemp",
+      "id": "mctl_color_temp",
+      "endpoint": 1,
+      "cluster": 768,
+      "attr": 7,
+      "haType": "color temperature",
+      "ingress": "Matter Mireds → CT %",
+      "egress": "Matter ColorTemp"
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter Level 0-254 → 0-100", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(Math.max(0, Math.min(254, v)) * 100 / 254);" },
+      { "name": "Matter Mireds → CT %", "fn": "// CT in mireds -> Kelvin -> 0-100% (100=2700K warmast, 0=6500K kallast)\nconst m = Number(msg.payload);\nif (!isFinite(m) || m <= 0) return null;\nconst K = 1e6 / m;\nconst pct = Math.round(Math.max(0, Math.min(100, (6500 - K) / (6500 - 2700) * 100)));\nreturn pct;" }
+    ],
+    "egress": [
+      { "name": "Matter OnOff", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 6,\n    command: msg.payload ? 'On' : 'Off'\n};\nreturn msg;" },
+      { "name": "Matter Level", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst pct = Math.max(0, Math.min(100, Number(msg.payload) || 0));\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 8,\n    command: 'MoveToLevelWithOnOff',\n    args: { level: Math.round(pct * 254 / 100), transitionTime: 0, optionsMask: 0, optionsOverride: 0 }\n};\nreturn msg;" },
+      { "name": "Matter ColorTemp", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst pct = Math.max(0, Math.min(100, Number(msg.payload) || 0));\nconst K = 6500 - pct / 100 * (6500 - 2700);\nconst mireds = Math.max(153, Math.min(555, Math.round(1e6 / K)));\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 768,\n    command: 'MoveToColorTemperature',\n    args: { colorTemperatureMireds: mireds, transitionTime: 0, optionsMask: 0, optionsOverride: 0 }\n};\nreturn msg;" }
+    ]
+  }
+}

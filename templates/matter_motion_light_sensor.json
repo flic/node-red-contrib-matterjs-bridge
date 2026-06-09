@@ -1,0 +1,47 @@
+{
+  "id": "matter_motion_light_sensor_thingtype",
+  "name": "Matter Motion + Light Sensor",
+  "shape": "(1,263),(2,262)",
+  "nodestatus": "🚶 %Motion% ☀ %Illuminance% lux 🔋 %Battery%%",
+  "items": [
+    {
+      "name": "Motion",
+      "id": "mmls_motion",
+      "endpoint": 1,
+      "cluster": 1030,
+      "attr": 0,
+      "haType": "motion",
+      "ingress": "Matter occupancy bit → bool",
+      "readOnly": true
+    },
+    {
+      "name": "Illuminance",
+      "id": "mmls_illuminance",
+      "endpoint": 2,
+      "cluster": 1024,
+      "attr": 0,
+      "haType": "illuminance",
+      "ingress": "Matter illuminance → lux",
+      "readOnly": true
+    },
+    {
+      "name": "Battery",
+      "id": "mmls_battery",
+      "endpoint": 0,
+      "cluster": 47,
+      "attr": 12,
+      "haType": "battery",
+      "ingress": "Matter halfpercent → percent",
+      "readOnly": true
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Matter occupancy bit → bool", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn (v & 1) === 1;" },
+      { "name": "Matter illuminance → lux", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(Math.pow(10, (v - 1) / 10000));" },
+      { "name": "Matter halfpercent → percent", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(v / 2);" },
+      { "name": "Pass-through", "fn": "return msg.payload;" }
+    ],
+    "egress": []
+  }
+}

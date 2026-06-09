@@ -1,0 +1,91 @@
+<script type="text/javascript">
+    RED.nodes.registerType('matterController', {
+        category: 'config',
+        defaults: {
+            name: { value: '' },
+            url: { value: '${MATTER_WS_URL}', required: true },
+            templatesDir: { value: '' },
+            polls: { value: [] }
+        },
+        label: function () {
+            return this.name || this.url || 'matter controller';
+        },
+        oneditprepare: function () {
+            $('#node-config-input-polls-list').editableList({
+                addItem: function (container, i, opt) {
+                    var row = opt || {};
+                    container.css({
+                        overflow: 'hidden', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', gap: '4px'
+                    });
+                    var cluster = $('<input/>', { type: 'number', placeholder: 'cluster (e.g. 513)', style: 'flex:1;min-width:80px;' })
+                        .val(row.cluster || '').appendTo(container);
+                    var attribute = $('<input/>', { type: 'number', placeholder: 'attr (e.g. 17)', style: 'flex:1;min-width:60px;' })
+                        .val(row.attribute || '').appendTo(container);
+                    var interval = $('<input/>', { type: 'number', placeholder: 'interval s', style: 'width:80px;' })
+                        .val(row.intervalSeconds || 60).appendTo(container);
+                    var scope = $('<input/>', { type: 'text', placeholder: 'nodeId (blank=all)', style: 'width:120px;' })
+                        .val(row.scopeFilter || '').appendTo(container);
+                },
+                removable: true,
+                sortable: false
+            });
+            for (var i = 0; i < (this.polls || []).length; i++) {
+                $('#node-config-input-polls-list').editableList('addItem', this.polls[i]);
+            }
+        },
+        oneditsave: function () {
+            var polls = [];
+            $('#node-config-input-polls-list').editableList('items').each(function () {
+                var inputs = $(this).find('input');
+                if (inputs.length >= 4) {
+                    polls.push({
+                        cluster: $(inputs[0]).val(),
+                        attribute: $(inputs[1]).val(),
+                        intervalSeconds: $(inputs[2]).val(),
+                        scopeFilter: $(inputs[3]).val()
+                    });
+                }
+            });
+            this.polls = polls;
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="matterController">
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="matter (Hemma)">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-url"><i class="fa fa-globe"></i> WS URL</label>
+        <input type="text" id="node-config-input-url" placeholder="ws://matter.caddy:5580/ws">
+    </div>
+    <div class="form-tips">
+        URL stödjer env-substitution: <code>${MATTER_WS_URL}</code> löses från process.env vid start.
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-templatesDir"><i class="fa fa-folder-open"></i> Templates dir</label>
+        <input type="text" id="node-config-input-templatesDir" placeholder="(blank = endast bundlade)">
+    </div>
+    <div class="form-tips">
+        Valfri path till katalog med custom template-JSON-filer. Overridar bundlade vid namnkollision.
+    </div>
+    <div class="form-row">
+        <label><i class="fa fa-repeat"></i> Auto-poll</label>
+    </div>
+    <div class="form-row">
+        <ol id="node-config-input-polls-list"></ol>
+    </div>
+    <div class="form-tips">
+        Polla (cluster, attribute) periodiskt — för enheter som inte spontant pushar.
+        Vanliga konfigurationer: cluster 513 attr 17 (termostat-setpoint), 60s. cluster 144 attr 8 (power), 30s.
+        scopeFilter tomt = alla noder, annars matchas mot nodeId.
+    </div>
+</script>
+
+<script type="text/html" data-help-name="matterController">
+    <p>Konfigurations-nod för WebSocket-anslutning mot en matterjs-server-instans.</p>
+    <p>Skapar en delad <code>MatterClient</code> (via @matter-server/ws-client) som alla matterIn-, matterOut-
+    och matterDiscover-noder kan dela. Hanterar reconnect automatiskt och underhåller en nod-cache.</p>
+</script>

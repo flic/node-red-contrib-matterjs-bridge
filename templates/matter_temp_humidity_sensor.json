@@ -1,0 +1,59 @@
+{
+  "id": "matter_temp_humidity_sensor_thingtype",
+  "name": "Matter Temp+Humidity Sensor",
+  "shape": "(1,770),(2,775)",
+  "nodestatus": "🌡 %Temperature%°C 💧 %Humidity%% 📊 %Pressure% hPa 🔋 %Battery%%",
+  "items": [
+    {
+      "name": "Temperature",
+      "id": "mths_temp",
+      "endpoint": 1,
+      "cluster": 1026,
+      "attr": 0,
+      "haType": "temperature",
+      "ingress": "Matter centi → unit",
+      "readOnly": true,
+      "notes": "TemperatureMeasurement, 0.01 °C signed."
+    },
+    {
+      "name": "Humidity",
+      "id": "mths_humidity",
+      "endpoint": 2,
+      "cluster": 1029,
+      "attr": 0,
+      "haType": "humidity",
+      "ingress": "Matter centi → unit",
+      "readOnly": true,
+      "notes": "RelativeHumidityMeasurement, 0.01 %."
+    },
+    {
+      "name": "Pressure",
+      "id": "mths_pressure",
+      "endpoint": 1,
+      "cluster": 319486977,
+      "attr": 319422484,
+      "haType": "pressure",
+      "ingress": "Pass-through",
+      "readOnly": true,
+      "notes": "Eve manufacturer-specific cluster 0x130AFC01 attr 0x130A1E84, float hPa."
+    },
+    {
+      "name": "Battery",
+      "id": "mths_battery",
+      "endpoint": 0,
+      "cluster": 47,
+      "attr": 12,
+      "haType": "battery",
+      "ingress": "Matter halfpercent → percent",
+      "readOnly": true
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter centi → unit", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn v / 100;" },
+      { "name": "Matter halfpercent → percent", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(v / 2);" }
+    ],
+    "egress": []
+  }
+}
