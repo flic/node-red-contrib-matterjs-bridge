@@ -1,24 +1,40 @@
 <script type="text/javascript">
-    RED.nodes.registerType('matterIn', {
-        category: 'matter',
+    RED.nodes.registerType('matterjsIn', {
+        category: 'Home Automation',
         color: '#a6d8e8',
+        paletteLabel: 'matterjs in',
         defaults: {
             name: { value: '' },
-            controller: { value: '', type: 'matterController', required: true },
+            controller: { value: '', type: 'matterjsController', required: true },
             format: { value: 'hal2' },
             topicFilter: { value: '' },
-            nodeIdFilter: { value: '' }
+            nodeIdFilter: { value: '' },
+            errorOutput: { value: false }
         },
         inputs: 0,
         outputs: 1,
+        outputLabels: function (i) {
+            if (this.errorOutput) return i === 0 ? 'events' : 'errors';
+            return 'events';
+        },
         icon: 'inject.svg',
         label: function () {
-            return this.name || 'matter in';
+            return this.name || 'matterjs in';
+        },
+        oneditprepare: function () {
+            $('#node-input-errorOutput').on('change', function () {
+                $('#node-input-errorOutput-hint').text(this.checked
+                    ? 'Outputs: 1=events, 2=errors'
+                    : 'Single output: events only');
+            }).trigger('change');
+        },
+        oneditsave: function () {
+            this.outputs = this.errorOutput ? 2 : 1;
         }
     });
 </script>
 
-<script type="text/html" data-template-name="matterIn">
+<script type="text/html" data-template-name="matterjsIn">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name">
@@ -31,22 +47,39 @@
         <label for="node-input-format"><i class="fa fa-cog"></i> Format</label>
         <select id="node-input-format">
             <option value="hal2">hal2 (topic + payload + msg.matter)</option>
-            <option value="raw">raw (rå event-data)</option>
+            <option value="raw">raw (unformatted event data)</option>
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-topicFilter"><i class="fa fa-filter"></i> Topic filter</label>
-        <input type="text" id="node-input-topicFilter" placeholder="matter/42/# (blank = alla)">
+        <input type="text" id="node-input-topicFilter" placeholder="matter/42/# (blank = all)">
     </div>
     <div class="form-row">
-        <label for="node-input-nodeIdFilter"><i class="fa fa-filter"></i> NodeId filter</label>
-        <input type="text" id="node-input-nodeIdFilter" placeholder="(blank = alla)">
+        <label for="node-input-nodeIdFilter"><i class="fa fa-filter"></i> Matter node id</label>
+        <input type="text" id="node-input-nodeIdFilter" placeholder="(blank = all)">
+    </div>
+    <div class="form-row">
+        <label for="node-input-errorOutput"><i class="fa fa-exclamation-triangle"></i> Error output</label>
+        <input type="checkbox" id="node-input-errorOutput" style="display:inline-block; width:auto; vertical-align:top;">
+        <span id="node-input-errorOutput-hint" style="margin-left:8px; color:#999;"></span>
     </div>
 </script>
 
-<script type="text/html" data-help-name="matterIn">
-    <p>Emittar attribute-uppdateringar och node-events från matterjs-server som Node-RED-msgs.</p>
-    <p><b>hal2-format</b>: <code>msg.topic = matter/{nodeId}/{ep}/{cluster}/{attr}</code>,
-    <code>msg.payload = nytt värde</code>, <code>msg.matter = {nodeId, endpoint, cluster, attribute, kind}</code>.</p>
-    <p>Topic filter stödjer MQTT-wildcards: <code>+</code> (en nivå) och <code>#</code> (resten).</p>
+<script type="text/html" data-help-name="matterjsIn">
+    <p>Emits attribute updates and node events from matterjs-server as Node-RED messages.</p>
+    <p><b>hal2 format</b>: <code>msg.topic = matter/{nodeId}/{ep}/{cluster}/{attr}</code>,
+    <code>msg.payload = new value</code>, <code>msg.matter = {nodeId, endpoint, cluster, attribute, kind}</code>.</p>
+    <p>Topic filter supports MQTT wildcards: <code>+</code> (one level) and <code>#</code> (remainder).</p>
+    <p>Matter node id filters on the Matter device id (assigned by matterjs-server at commissioning),
+    not Node-RED's internal node id.</p>
+
+    <h4>Error output (optional)</h4>
+    <p>matterjsIn has no triggering input message, so catch-nodes can't be used to handle controller-side
+    errors (connection lost, malformed WS payload, etc.). Enable <b>Error output</b> to add a second output
+    that receives error msgs:</p>
+    <pre>msg.topic = "matter/_error"
+msg.payload = { type, source, message, ts }</pre>
+    <p>Common <code>type</code> values: <code>disconnected</code>, <code>bridge_error</code>,
+    <code>bridge_create_failed</code>, <code>start_listening_failed</code>. The same errors are also visible
+    via the controller's status (e.g. yellow ring "disconnected" / "reconnect in 4s").</p>
 </script>

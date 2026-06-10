@@ -1,10 +1,11 @@
 'use strict';
 
 module.exports = function (RED) {
-    function matterOut(config) {
+    function matterjsOut(config) {
         RED.nodes.createNode(this, config);
         const node = this;
         node.controller = RED.nodes.getNode(config.controller);
+        node.errorOutput = !!config.errorOutput;
 
         if (!node.controller) {
             node.status({ fill: 'red', shape: 'ring', text: 'no controller' });
@@ -57,7 +58,14 @@ module.exports = function (RED) {
         node.on('input', async function (msg, send, done) {
             const payload = msg.payload;
             if (!payload) {
-                done && done(new Error('matterOut: empty payload'));
+                const err = new Error('matterjsOut: empty payload');
+                if (node.errorOutput) {
+                    msg.payload = { type: 'invalid_input', source: 'matterjsOut', message: err.message, ts: new Date().toISOString() };
+                    send([null, msg]);
+                    done && done();
+                    return;
+                }
+                done && done(err);
                 return;
             }
             const cmds = Array.isArray(payload) ? payload : [payload];
@@ -69,16 +77,32 @@ module.exports = function (RED) {
                 }
                 msg.payload = results.length === 1 ? results[0] : results;
                 node.status({ fill: 'green', shape: 'dot', text: 'ok' });
-                send(msg);
+                if (node.errorOutput) send([msg, null]);
+                else send(msg);
                 done && done();
             } catch (e) {
                 node.status({ fill: 'red', shape: 'dot', text: 'error' });
-                done && done(e);
+                if (node.errorOutput) {
+                    const errMsg = {
+                        topic: 'matter/_error',
+                        payload: {
+                            type: 'command_failed',
+                            source: e.source || 'matterjsOut',
+                            message: e.message,
+                            ts: new Date().toISOString(),
+                        },
+                        originalPayload: payload,
+                    };
+                    send([null, errMsg]);
+                    done && done();
+                } else {
+                    done && done(e);
+                }
             }
         });
 
         node.status({ fill: 'grey', shape: 'ring', text: 'idle' });
     }
 
-    RED.nodes.registerType('matterOut', matterOut);
+    RED.nodes.registerType('matterjsOut', matterjsOut);
 };

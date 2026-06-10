@@ -1,22 +1,38 @@
 <script type="text/javascript">
-    RED.nodes.registerType('matterOut', {
-        category: 'matter',
+    RED.nodes.registerType('matterjsOut', {
+        category: 'Home Automation',
         color: '#a6d8e8',
+        paletteLabel: 'matterjs out',
         defaults: {
             name: { value: '' },
-            controller: { value: '', type: 'matterController', required: true }
+            controller: { value: '', type: 'matterjsController', required: true },
+            errorOutput: { value: false }
         },
         inputs: 1,
         outputs: 1,
+        outputLabels: function (i) {
+            if (this.errorOutput) return i === 0 ? 'result' : 'errors';
+            return 'result';
+        },
         icon: 'arrow-in.svg',
         align: 'right',
         label: function () {
-            return this.name || 'matter out';
+            return this.name || 'matterjs out';
+        },
+        oneditprepare: function () {
+            $('#node-input-errorOutput').on('change', function () {
+                $('#node-input-errorOutput-hint').text(this.checked
+                    ? 'Outputs: 1=result, 2=errors. Failures go to output 2 (NOT to catch nodes).'
+                    : 'Single output: result. Failures propagate via done(err) to catch nodes.');
+            }).trigger('change');
+        },
+        oneditsave: function () {
+            this.outputs = this.errorOutput ? 2 : 1;
         }
     });
 </script>
 
-<script type="text/html" data-template-name="matterOut">
+<script type="text/html" data-template-name="matterjsOut">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name">
@@ -25,16 +41,34 @@
         <label for="node-input-controller"><i class="fa fa-globe"></i> Controller</label>
         <input type="text" id="node-input-controller">
     </div>
+    <div class="form-row">
+        <label for="node-input-errorOutput"><i class="fa fa-exclamation-triangle"></i> Error output</label>
+        <input type="checkbox" id="node-input-errorOutput" style="display:inline-block; width:auto; vertical-align:top;">
+        <span id="node-input-errorOutput-hint" style="margin-left:8px; color:#999;"></span>
+    </div>
 </script>
 
-<script type="text/html" data-help-name="matterOut">
-    <p>Skickar kommandon till matterjs-server via den officiella WS-klienten.</p>
-    <p><code>msg.payload</code> ska vara ett objekt (eller array av objekt):</p>
+<script type="text/html" data-help-name="matterjsOut">
+    <p>Sends commands to matterjs-server via the official WS client.</p>
+    <p><code>msg.payload</code> must be an object (or array of objects):</p>
     <pre>{ kind: 'device_command', nodeId, endpoint, cluster, command, args? }
 { kind: 'write_attribute', nodeId, endpoint, cluster, attribute, value }
 { kind: 'read_attribute',  nodeId, endpoint, cluster, attribute }</pre>
-    <p>Default-kind är <code>device_command</code> om inget anges.</p>
-    <p>För <code>write_attribute</code> emittas dessutom en optimistic <code>matter:attribute</code>-event
-    på controllern, så att Things-noder reagerar omedelbart även för enheter som inte själva pushar (Mill-mönstret).</p>
-    <p>Output: msg.payload = resultat från WS-anropet (eller array av resultat om input var array).</p>
+    <p>Default kind is <code>device_command</code> if omitted.</p>
+    <p>For <code>write_attribute</code>, an optimistic <code>matter:attribute</code> event is also emitted
+    on the controller so that downstream Things react immediately — even for devices that don't push back
+    on their own writes (the Mill thermostat pattern).</p>
+
+    <h4>Error handling</h4>
+    <p>By default, failures (timeout, unknown nodeId, malformed payload, etc.) propagate via
+    <code>done(err)</code> → standard Node-RED <b>catch nodes</b>. The status turns red and the original msg
+    is dispatched to the catch handler.</p>
+    <p>Enable <b>Error output</b> to instead route errors to a second output port:</p>
+    <pre>msg.topic = "matter/_error"
+msg.payload = { type, source, message, ts }
+msg.originalPayload = <i>the original command(s)</i></pre>
+    <p>With Error output enabled, catch nodes no longer fire for this node.</p>
+
+    <h4>Output</h4>
+    <p>Success: <code>msg.payload</code> = result from the WS call (or array of results if input was an array).</p>
 </script>

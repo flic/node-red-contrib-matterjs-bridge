@@ -1,10 +1,11 @@
 <script type="text/javascript">
-    RED.nodes.registerType('matterDiscover', {
-        category: 'matter',
+    RED.nodes.registerType('matterjsDiscover', {
+        category: 'Home Automation',
         color: '#a6d8e8',
+        paletteLabel: 'matterjs discover',
         defaults: {
             name: { value: '' },
-            controller: { value: '', type: 'matterController', required: true },
+            controller: { value: '', type: 'matterjsController', required: true },
             format: { value: 'hal2' },
             eventHandlerId: { value: '' },
             filter: { value: '' }
@@ -13,12 +14,33 @@
         outputs: 1,
         icon: 'parser-json.svg',
         label: function () {
-            return this.name || 'matter discover';
+            return this.name || 'matterjs discover';
+        },
+        oneditprepare: function () {
+            var self = this;
+            var $field = $('#node-input-eventHandlerId');
+            // Query the admin API for all flow nodes and find hal2EventHandler configs.
+            // If found, replace the text field with a dropdown of available handlers
+            // (with a blank "(auto)" option that delegates to runtime auto-detection).
+            $.getJSON('flows').done(function (flows) {
+                if (!Array.isArray(flows)) return;
+                var handlers = flows.filter(function (n) { return n && n.type === 'hal2EventHandler'; });
+                if (handlers.length === 0) return;
+                var $sel = $('<select/>').css('width', $field.css('width') || '70%');
+                $sel.append('<option value="">(auto — use first hal2EventHandler at runtime)</option>');
+                handlers.forEach(function (h) {
+                    var label = (h.name ? h.name + ' — ' : '') + h.id;
+                    $sel.append($('<option/>').val(h.id).text(label));
+                });
+                $sel.val(self.eventHandlerId || '');
+                $sel.attr('id', 'node-input-eventHandlerId');
+                $field.replaceWith($sel);
+            });
         }
     });
 </script>
 
-<script type="text/html" data-template-name="matterDiscover">
+<script type="text/html" data-template-name="matterjsDiscover">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name">
@@ -30,36 +52,71 @@
     <div class="form-row">
         <label for="node-input-format"><i class="fa fa-cog"></i> Format</label>
         <select id="node-input-format">
-            <option value="hal2">hal2 (importerbar Node-RED-flow-snippet)</option>
-            <option value="summary">summary (per-nod metadata)</option>
+            <option value="hal2">hal2 (importable Node-RED flow snippet)</option>
+            <option value="summary">summary (per-node metadata only)</option>
+            <option value="node">node (full raw node data — for template development)</option>
         </select>
     </div>
     <div class="form-row">
-        <label for="node-input-eventHandlerId"><i class="fa fa-link"></i> EventHandler ID</label>
-        <input type="text" id="node-input-eventHandlerId" placeholder="(för hal2-format) — ID på din hal2EventHandler">
+        <label for="node-input-eventHandlerId"><i class="fa fa-ellipsis-h"></i> Event handler</label>
+        <input type="text" id="node-input-eventHandlerId" placeholder="(blank = auto, or set hal2EventHandler id manually)">
     </div>
     <div class="form-row">
-        <label for="node-input-filter"><i class="fa fa-filter"></i> NodeId filter</label>
-        <input type="text" id="node-input-filter" placeholder="(blank = alla noder)">
+        <label for="node-input-filter"><i class="fa fa-filter"></i> Matter node id</label>
+        <input type="text" id="node-input-filter" placeholder='(blank = all, numeric id, or "last")'>
     </div>
 </script>
 
-<script type="text/html" data-help-name="matterDiscover">
-    <p>Emittar en importerbar JSON-snippet med <code>hal2Thing</code> + <code>hal2ThingType</code>-configs
-    för alla commissionerade Matter-noder.</p>
-    <p>Använd så här:</p>
+<script type="text/html" data-help-name="matterjsDiscover">
+    <p>Generates output describing commissioned Matter nodes, in one of three formats:</p>
+    <ul>
+        <li><b>hal2</b>: an importable Node-RED flow snippet (<code>hal2Thing</code> + <code>hal2ThingType</code> configs).
+        Self-contained — local ingress/egress functions, no <code>hal2EventHandler</code> library mutations required.</li>
+        <li><b>summary</b>: lightweight per-node metadata (<code>node_id, vendor, product, shape, suggested_thingtype</code>).</li>
+        <li><b>node</b>: full raw node data including the entire attribute map. Use this when you're developing a
+        new device template — copy the attributes blob to inspect cluster/attribute IDs.</li>
+    </ul>
+
+    <h4>Importing the hal2 snippet</h4>
     <ol>
-        <li>Koppla en inject → matterDiscover → debug.</li>
-        <li>Tryck inject, kopiera JSON-arrayen från debug-panelen.</li>
-        <li>Öppna Import-dialogen i Node-RED-editorn (<code>Ctrl+I</code>), välj "Clipboard", klistra in.</li>
-        <li>Granska de nya noderna, Deploy.</li>
+        <li>Wire an inject → matterjs discover → debug.</li>
+        <li>Press inject. The debug panel shows <code>msg.payload</code> as a JSON array.</li>
+        <li>Click <b>Copy value</b> on the top row (<code>array[N]</code>) — you need the entire <code>[...]</code> array,
+        not a single element.</li>
+        <li>Open the Import dialog (<code>Ctrl+I</code>), select <b>Clipboard</b>, paste.</li>
+        <li>Node-RED warns about any id conflicts (ThingTypes you already have) — skip those.
+        Review the new nodes, then Deploy.</li>
     </ol>
-    <p>Templates läses från controller-nodens templates-katalog (bundlade + override).
-    Genererade ThingType-configs är helt självinneslutna — lokala ingress/egress-funktioner,
-    inga ändringar i hal2EventHandler-bibban behövs.</p>
-    <p><b>EventHandler ID</b>: krävs för hal2-format. Slå upp ID:t på din hal2EventHandler config-nod
-    i Node-RED-editorn (visas i URL:en när du editerar den).</p>
-    <p>Output (hal2): <code>msg.payload</code> = array av flow-noder, <code>msg.summary</code> = lista per nod,
-    <code>msg.skipped</code> = noder som hoppas över med skäl.</p>
-    <p>Output (summary): <code>msg.payload</code> = lista <code>[{node_id, vendor, product, shape, suggested_thingtype}]</code>.</p>
+
+    <h4>Event handler</h4>
+    <p>If hal2 is installed, this field is replaced by a dropdown of available <code>hal2EventHandler</code> configs
+    (queried live from Node-RED's flow registry). Leave blank to let the node auto-pick the first one at runtime.</p>
+
+    <h4>Matter node id</h4>
+    <p>Filters by the Matter node id (assigned by matterjs-server at commissioning, e.g. 29 or 48),
+    <i>not</i> Node-RED's internal node id. Accepts:</p>
+    <ul>
+        <li>Blank — all commissioned nodes.</li>
+        <li>A numeric id, e.g. <code>48</code>.</li>
+        <li>The keyword <code>last</code> — resolves to the most recently commissioned node
+        (by <code>date_commissioned</code>). Useful right after pairing a new device.</li>
+    </ul>
+
+    <h4>msg overrides</h4>
+    <p>Any config field (except <i>name</i> and <i>controller</i>) can be overridden per invocation:</p>
+    <ul>
+        <li><code>msg.format</code> — <code>"hal2"</code>, <code>"summary"</code>, or <code>"node"</code>.</li>
+        <li><code>msg.eventHandlerId</code> — explicit hal2EventHandler id.</li>
+        <li><code>msg.nodeId</code> — Matter node id filter (numeric or <code>"last"</code>). Takes precedence over msg.payload.</li>
+        <li><code>msg.payload</code> — if numeric or string matching <code>"last"</code> / digits, used as the filter.
+        Simplest path from an inject node (set payload type to number or string).</li>
+    </ul>
+
+    <h4>Output</h4>
+    <p>hal2: <code>msg.payload</code> = array of flow nodes, <code>msg.summary</code> = per-node list,
+    <code>msg.skipped</code> = nodes skipped with reason.</p>
+    <p>summary: <code>msg.payload</code> = <code>[{node_id, vendor, product, shape, suggested_thingtype}]</code>.</p>
+    <p>node: <code>msg.payload</code> = <code>[{node_id, vendor, product, firmware, hardware, serial, shape,
+    suggested_thingtype, available, date_commissioned, attributes}]</code>, plus
+    <code>msg.summary</code> as above.</p>
 </script>

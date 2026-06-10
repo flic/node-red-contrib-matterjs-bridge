@@ -1,25 +1,25 @@
-# nodered-contrib-matterjs-bridge
+# node-red-contrib-matterjs-bridge
 
-Node-RED bridge mellan [matterjs-server](https://github.com/matter-js/matterjs-server) (en Matter-over-IP-controller byggd ovanpå [matter.js](https://github.com/project-chip/matter.js)) och Node-RED-flows. Bygger på officiella `@matter-server/ws-client`.
+Node-RED bridge between [matterjs-server](https://github.com/matter-js/matterjs-server) (a Matter-over-IP controller built on top of [matter.js](https://github.com/project-chip/matter.js)) and Node-RED flows. Built on the official `@matter-server/ws-client`.
 
-## Vad paketet ger dig
+## What's in the box
 
-Fyra Node-RED-noder:
+Four Node-RED nodes:
 
-- **matterController** (config) — anslutning till matterjs-server WS-API, cache av noder, valfri attribut-polling.
-- **matterIn** (runtime) — emittar attribute-uppdateringar och node-events från Matter-fabrics som vanliga Node-RED-msgs.
-- **matterOut** (runtime) — tar emot kommandon (device_command, write_attribute) och dispatchar till matterjs-server.
-- **matterDiscover** (runtime) — genererar en **importerbar JSON-snippet** för nya enheter du commissionerar. Du kör Import → Clipboard i Node-RED-editorn och Thingen är klar att deploya.
+- **matterjs controller** (config) — connection to the matterjs-server WS API, node cache, optional attribute polling.
+- **matterjs in** (runtime) — emits attribute updates and node events from your Matter fabric as plain Node-RED messages.
+- **matterjs out** (runtime) — receives commands (`device_command`, `write_attribute`, `read_attribute`) and dispatches them to matterjs-server.
+- **matterjs discover** (runtime) — generates an **importable JSON snippet** for newly commissioned devices. Run Import → Clipboard in the Node-RED editor and the Thing is ready to deploy.
 
-## Topic-schema
+## Topic schema
 
-matterIn emittar på topic `matter/{nodeId}/{endpoint}/{cluster}/{attribute}` med payload = aktuellt värde. `msg.matter` innehåller strukturerad metadata `{ nodeId, endpoint, cluster, attribute, kind }`.
+`matterjs in` emits messages on topic `matter/{nodeId}/{endpoint}/{cluster}/{attribute}` with payload = current value. `msg.matter` carries structured metadata `{ nodeId, endpoint, cluster, attribute, kind }`.
 
-Exempel:
-- `matter/29/1/6/0` payload `true` → On/Off-state (cluster 6 attr 0) på endpoint 1 av node 29
+Examples:
+- `matter/29/1/6/0` payload `true` → On/Off state (cluster 6 attr 0) on endpoint 1 of node 29
 - `matter/41/1/1026/0` payload `1850` → Temperature 18.50 °C (cluster 1026 attr 0)
 
-matterOut accepterar samma format på input via `msg.payload`:
+`matterjs out` accepts the same format on its input via `msg.payload`:
 
 ```javascript
 // Device command
@@ -28,7 +28,7 @@ msg.payload = { kind: 'device_command', nodeId: 29, endpoint: 1, cluster: 6, com
 // Write attribute
 msg.payload = { kind: 'write_attribute', nodeId: 4, endpoint: 1, cluster: 513, attribute: 17, value: 2300 };
 
-// Array av kommandon — alla skickas i sekvens
+// Array of commands — sent sequentially
 msg.payload = [ {...}, {...} ];
 ```
 
@@ -36,55 +36,53 @@ msg.payload = [ {...}, {...} ];
 
 ```bash
 cd ~/.node-red
-npm install nodered-contrib-matterjs-bridge
+npm install node-red-contrib-matterjs-bridge
 ```
 
-Restart Node-RED och leta efter "matter"-noderna i paletten.
+Restart Node-RED and look for the "matterjs"-prefixed nodes in the palette under "Home Automation".
 
-Sätt env-variabeln `MATTER_WS_URL` (eller fyll i WS-URL direkt i matterController) för att peka mot din matterjs-server-instans, t.ex. `ws://matter.caddy:5580/ws`.
+Set the `MATTER_WS_URL` env variable (or fill in the WS URL directly on the matterjs controller node) to point at your matterjs-server instance, e.g. `ws://matter.caddy:5580/ws`.
 
-## Sync av nya enheter — paste-importflöde
+## Adding new devices — the paste-import flow
 
-1. Commissionera en ny enhet via matterjs-server-dashboarden.
-2. I Node-RED: trigga en matterDiscover-nod (kopplad till en inject och en debug).
-3. Debug-panelen visar en JSON-array.
-4. Kopiera arrayen, öppna Node-RED-editorns Import-dialog (`Ctrl+I`), välj "Clipboard", klistra in, Import.
-5. Nya `hal2Thing` + `hal2ThingType`-noderna dyker upp i flow-editorn. Granska, Deploy.
-
-Inga side-effects, inget Admin-API-tricks, helt säkert att backa ur.
+1. Commission a new device via the matterjs-server dashboard.
+2. In Node-RED: trigger a matterjs discover node (wired to an inject and a debug).
+3. The debug panel shows a JSON array.
+4. Copy the array, open Node-RED's Import dialog (`Ctrl+I`), pick "Clipboard", paste, Import.
+5. The new `hal2Thing` + `hal2ThingType` nodes appear in the editor. Review, Deploy.
 
 ## Templates
 
-Paketet bundlar templates för dessa device-typer i `templates/`:
+The package ships with templates for these device types in `templates/`:
 
-- `matter_plug` — enkel On/Off-plugg
-- `matter_metered_plug` — On/Off + power på separat metering-endpoint (1296)
-- `matter_metered_plug_combined` — On/Off + power på *samma* endpoint som plug
-- `matter_dual_metered_plug` — 2-kanals metered plug (t.ex. Shelly 2PM)
-- `matter_metered_switch` — On/Off-relä med metering på root-endpoint
+- `matter_plug` — simple On/Off plug
+- `matter_metered_plug` — On/Off + power on a separate metering endpoint (device type 1296)
+- `matter_metered_plug_combined` — On/Off + power on the *same* endpoint as the plug
+- `matter_dual_metered_plug` — 2-channel metered plug (e.g. Shelly 2PM)
+- `matter_metered_switch` — On/Off relay with metering on the root endpoint
 - `matter_dim_light` — On/Off + brightness
-- `matter_metered_dim_light_inline` — dimmer med inline metering
+- `matter_metered_dim_light_inline` — dimmer with inline metering
 - `matter_ct_light` — On/Off + brightness + color temperature
-- `matter_thermostat` — temperatur, target temp, system mode
-- `matter_temp_humidity_sensor` — temp + RH + battery (Eve Weather + standardsensorer)
-- `matter_contact_sensor` — dörr/fönster med batteri
-- `matter_water_leak_sensor` — vattenläcksensor med batteri
-- `matter_air_quality_sensor` — full luftkvalitet (AQ, temp, RH, CO2, PM2.5)
-- `matter_dual_button` — 2-knapps switch
-- `matter_motion_light_sensor` — rörelse + ljus + batteri
+- `matter_thermostat` — temperature, target temp, system mode
+- `matter_temp_humidity_sensor` — temp + RH + battery (Eve Weather + standard sensors)
+- `matter_contact_sensor` — door/window with battery
+- `matter_water_leak_sensor` — water leak sensor with battery
+- `matter_air_quality_sensor` — full air quality (AQ, temp, RH, CO2, PM2.5)
+- `matter_dual_button` — 2-button switch
+- `matter_motion_light_sensor` — motion + illuminance + battery
 
-### Egna templates
+### Custom templates
 
-Konfigurera "Templates directory" i matterController-noden — peka på en katalog på disk. Alla `*.json`-filer i den katalogen läses in vid Controller-start och overridar/utökar de bundlade. Bra för att dela egna templates via git eller gist.
+Configure "Templates directory" on the matterjs controller node — point it at a directory on disk. Every `*.json` file in that directory is loaded at controller start and overrides/extends the bundled templates. Convenient for sharing your own templates via git or gist.
 
-### Template-schema
+### Template schema
 
-Varje template-JSON-fil följer denna struktur:
+Each template JSON file follows this structure:
 
 ```json
 {
   "id": "matter_xxx_thingtype",
-  "name": "Människovänligt namn",
+  "name": "Human-readable name",
   "shape": "(1,266)",
   "nodestatus": "🔌 %On% ⚡ %Power%W",
   "items": [
@@ -106,20 +104,26 @@ Varje template-JSON-fil följer denna struktur:
 }
 ```
 
-`shape` är resultatet av `computeShape()` — strukturen av endpoint+device_type-par. matterDiscover använder den för att matcha en commissionerad nod mot rätt template.
+`shape` is the output of `computeShape()` — the structure of endpoint + device_type pairs. `matterjs discover` uses it to match a commissioned node to the right template.
 
-Templates är helt självinneslutna — `functions.ingress[]` och `functions.egress[]` blir lokala på den genererade `hal2ThingType`-noden, inga ändringar i hal2EventHandler-bibban behövs.
+Templates are fully self-contained: `functions.ingress[]` and `functions.egress[]` are emitted as local arrays on the generated `hal2ThingType` node — no changes to the `hal2EventHandler` library are required.
 
 ## Auto-polling
 
-Vissa Matter-enheter (t.ex. Mill-termostater) pushar inte spontant `attribute_updated` för alla attribut. matterController har en valfri polling-konfiguration: lista `(cluster, attribute, intervalSeconds)`-rader. Controllern läser dessa periodiskt via `read_attribute` och emittar resultaten som vanliga attribute-events.
+Some Matter devices (e.g. Mill thermostats) don't spontaneously push `attribute_updated` for every attribute. The matterjs controller has an optional polling config: a list of `(cluster, attribute, intervalSeconds)` rows. The controller reads each periodically via `read_attribute` and emits the results as regular attribute events.
 
-Vanliga konfigurationer:
-- Termostat-setpoint: cluster 513 attr 17 + 18, var 60:e sekund
-- Plug-metering: cluster 144 attr 8 (power), var 30:e sekund
+Common configurations:
+- Thermostat setpoint: cluster 513 attr 17 + 18, every 60 seconds
+- Plug metering: cluster 144 attr 8 (power), every 30 seconds
 
-## Beroenden
+## Error handling
+
+- `matterjs out` and `matterjs discover` propagate failures via `done(err)`, which Node-RED's standard **catch** node picks up. The status turns red and the error msg is dispatched to the catch handler.
+- `matterjs in` has no triggering input, so catch nodes can't be used to surface controller-side errors (connection lost, malformed WS payload, etc.). Enable the per-node **Error output** toggle to add a second output port that receives error msgs (`msg.payload = { type, source, message, ts }`).
+- The controller auto-reconnects on disconnect with exponential backoff (2s → 4s → 8s → 16s → 32s → 60s, capped at 60s). Status text shows `reconnect in Ns`. Reset to base interval on successful reconnect.
+
+## Requirements
 
 - Node-RED >= 4.0.0
 - Node.js >= 20.19.0
-- `@matter-server/ws-client` ^1.0.0 (officiella matterjs-server-klienten)
+- `@matter-server/ws-client` ^1.0.0 (official matterjs-server client)

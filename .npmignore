@@ -1,0 +1,17 @@
+# Local agent / editor config
+.claude/
+.vscode/
+
+# Runtime / dev artifacts
+*.tgz
+*.log
+logs
+
+# Environment files
+.env
+.env.test
+
+# Git
+.git/
+.gitignore
+.gitattributes

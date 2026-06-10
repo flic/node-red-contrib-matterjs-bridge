@@ -4,7 +4,7 @@ const { createBridge } = require('../lib/matter-client');
 const { loadTemplates, buildShapeIndex } = require('../lib/templates');
 
 module.exports = function (RED) {
-    function matterController(config) {
+    function matterjsController(config) {
         RED.nodes.createNode(this, config);
         const node = this;
 
@@ -12,7 +12,11 @@ module.exports = function (RED) {
         node.url = config.url || '${MATTER_WS_URL}';
         node.templatesDir = config.templatesDir || '';
         node.polls = Array.isArray(config.polls) ? config.polls : [];
-        node.reconnectDelayMs = 5000;
+        // Exponential backoff for reconnect (base, factor, cap). Reset on connected.
+        const RECONNECT_BASE_MS = 2000;
+        const RECONNECT_FACTOR = 2;
+        const RECONNECT_CAP_MS = 60000;
+        let reconnectDelayMs = RECONNECT_BASE_MS;
 
         // Resolve env-substitution on url
         node.resolvedUrl = (() => {
@@ -40,6 +44,18 @@ module.exports = function (RED) {
             try { node.emit('matter:status', { fill, shape, text }); } catch (_) {}
         }
 
+        function emitError(type, err, source) {
+            const message = (err && err.message) ? err.message : String(err);
+            const payload = {
+                type,
+                source: source || (err && err.source) || 'controller',
+                message,
+                ts: new Date().toISOString(),
+            };
+            try { node.emit('matter:error', payload); } catch (_) {}
+            try { node.error(`[${payload.source}] ${message}`); } catch (_) {}
+        }
+
         async function start() {
             if (shuttingDown) return;
             if (!node.resolvedUrl) {
@@ -50,7 +66,7 @@ module.exports = function (RED) {
             try {
                 bridge = await createBridge(node.resolvedUrl);
             } catch (e) {
-                node.error('Failed to create matter bridge: ' + e.message);
+                emitError('bridge_create_failed', e, 'controller');
                 setStatus('red', 'ring', 'load failed');
                 scheduleReconnect();
                 return;
@@ -64,14 +80,16 @@ module.exports = function (RED) {
             bridge.on('node_updated', (data) => node.emit('matter:node_updated', data));
             bridge.on('nodes_changed', () => node.emit('matter:nodes_changed'));
             bridge.on('server_info', (info) => node.emit('matter:server', info));
-            bridge.on('error', (e) => node.error('matter bridge error: ' + (e && e.message ? e.message : String(e))));
+            bridge.on('error', (e) => emitError('bridge_error', e, e && e.source));
             bridge.on('connected', () => {
                 setStatus('green', 'dot', 'connected');
+                reconnectDelayMs = RECONNECT_BASE_MS; // reset backoff on successful connect
                 startPolling();
             });
             bridge.on('disconnected', () => {
                 setStatus('yellow', 'ring', 'disconnected');
                 stopPolling();
+                emitError('disconnected', new Error('WS connection lost'), 'connection');
                 scheduleReconnect();
             });
 
@@ -79,7 +97,7 @@ module.exports = function (RED) {
             try {
                 await bridge.start();
             } catch (e) {
-                node.error('start_listening failed: ' + e.message);
+                emitError('start_listening_failed', e, 'controller');
                 setStatus('red', 'ring', 'connect failed');
                 scheduleReconnect();
             }
@@ -88,12 +106,17 @@ module.exports = function (RED) {
         function scheduleReconnect() {
             if (shuttingDown) return;
             if (reconnectTimer) return;
+            const delay = reconnectDelayMs;
+            setStatus('yellow', 'ring', `reconnect in ${Math.round(delay / 1000)}s`);
+            node.log(`matterjs controller: scheduling reconnect in ${delay}ms`);
             reconnectTimer = setTimeout(async () => {
                 reconnectTimer = null;
                 try { bridge && bridge.stop && bridge.stop(); } catch (_) {}
                 bridge = null;
                 await start();
-            }, node.reconnectDelayMs);
+            }, delay);
+            // Bump for next attempt, capped
+            reconnectDelayMs = Math.min(reconnectDelayMs * RECONNECT_FACTOR, RECONNECT_CAP_MS);
         }
 
         function startPolling() {
@@ -158,8 +181,8 @@ module.exports = function (RED) {
         });
 
         // Kick off async start (non-blocking)
-        start().catch(e => node.error('matterController start failed: ' + e.message));
+        start().catch(e => node.error('matterjsController start failed: ' + e.message));
     }
 
-    RED.nodes.registerType('matterController', matterController);
+    RED.nodes.registerType('matterjsController', matterjsController);
 };

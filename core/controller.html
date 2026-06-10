@@ -1,6 +1,7 @@
 <script type="text/javascript">
-    RED.nodes.registerType('matterController', {
+    RED.nodes.registerType('matterjsController', {
         category: 'config',
+        paletteLabel: 'matterjs controller',
         defaults: {
             name: { value: '' },
             url: { value: '${MATTER_WS_URL}', required: true },
@@ -8,7 +9,7 @@
             polls: { value: [] }
         },
         label: function () {
-            return this.name || this.url || 'matter controller';
+            return this.name || this.url || 'matterjs controller';
         },
         oneditprepare: function () {
             $('#node-config-input-polls-list').editableList({
@@ -52,24 +53,24 @@
     });
 </script>
 
-<script type="text/html" data-template-name="matterController">
+<script type="text/html" data-template-name="matterjsController">
     <div class="form-row">
         <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-config-input-name" placeholder="matter (Hemma)">
+        <input type="text" id="node-config-input-name" placeholder="matterjs (Home)">
     </div>
     <div class="form-row">
         <label for="node-config-input-url"><i class="fa fa-globe"></i> WS URL</label>
         <input type="text" id="node-config-input-url" placeholder="ws://matter.caddy:5580/ws">
     </div>
     <div class="form-tips">
-        URL stödjer env-substitution: <code>${MATTER_WS_URL}</code> löses från process.env vid start.
+        URL supports env substitution: <code>${MATTER_WS_URL}</code> is resolved from process.env at startup.
     </div>
     <div class="form-row">
         <label for="node-config-input-templatesDir"><i class="fa fa-folder-open"></i> Templates dir</label>
-        <input type="text" id="node-config-input-templatesDir" placeholder="(blank = endast bundlade)">
+        <input type="text" id="node-config-input-templatesDir" placeholder="(blank = bundled only)">
     </div>
     <div class="form-tips">
-        Valfri path till katalog med custom template-JSON-filer. Overridar bundlade vid namnkollision.
+        Optional path to a directory containing custom template JSON files. Overrides bundled templates on id collision.
     </div>
     <div class="form-row">
         <label><i class="fa fa-repeat"></i> Auto-poll</label>
@@ -78,14 +79,14 @@
         <ol id="node-config-input-polls-list"></ol>
     </div>
     <div class="form-tips">
-        Polla (cluster, attribute) periodiskt — för enheter som inte spontant pushar.
-        Vanliga konfigurationer: cluster 513 attr 17 (termostat-setpoint), 60s. cluster 144 attr 8 (power), 30s.
-        scopeFilter tomt = alla noder, annars matchas mot nodeId.
+        Periodically poll a (cluster, attribute) pair — useful for devices that don't spontaneously push updates.
+        Common settings: cluster 513 attr 17 (thermostat setpoint) at 60s, or cluster 144 attr 8 (power) at 30s.
+        Leave scopeFilter blank to apply to all nodes; otherwise it matches a specific Matter nodeId.
     </div>
 </script>
 
-<script type="text/html" data-help-name="matterController">
-    <p>Konfigurations-nod för WebSocket-anslutning mot en matterjs-server-instans.</p>
-    <p>Skapar en delad <code>MatterClient</code> (via @matter-server/ws-client) som alla matterIn-, matterOut-
-    och matterDiscover-noder kan dela. Hanterar reconnect automatiskt och underhåller en nod-cache.</p>
+<script type="text/html" data-help-name="matterjsController">
+    <p>Config node for the WebSocket connection to a matterjs-server instance.</p>
+    <p>Creates a shared <code>MatterClient</code> (via <code>@matter-server/ws-client</code>) that all
+    matterjs in/out/discover nodes share. Handles reconnect automatically and maintains the node cache.</p>
 </script>

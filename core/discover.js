@@ -3,6 +3,8 @@
 const crypto = require('crypto');
 const { computeShape, extractIdentity } = require('../lib/shape');
 
+const VALID_FORMATS = new Set(['hal2', 'summary', 'node']);
+
 function genId(prefix) {
     return `${prefix}_${crypto.randomBytes(5).toString('hex')}`;
 }
@@ -133,8 +135,76 @@ function buildThingNode(matterNode, template, eventHandlerId, shape) {
     };
 }
 
+function resolveEventHandlerId(RED, explicitId) {
+    if (explicitId) return explicitId;
+    let found = '';
+    try {
+        RED.nodes.eachNode(function (n) {
+            if (!found && n && n.type === 'hal2EventHandler') found = n.id;
+        });
+    } catch (_) { /* eachNode unavailable — fall through */ }
+    return found;
+}
+
+/**
+ * Resolve a filter expression to a Matter nodeId string, or null for "match all".
+ *  - undefined/null/empty → null (no filter)
+ *  - numeric string ("48") → returned as-is
+ *  - "last" (case-insensitive) → nodeId with max date_commissioned in bridge cache
+ *  - anything else → null + warn
+ */
+function resolveFilter(node, bridge, raw) {
+    if (raw === undefined || raw === null || raw === '') return null;
+    const s = String(raw).trim();
+    if (s === '') return null;
+    if (/^\d+$/.test(s)) return s;
+    if (s.toLowerCase() === 'last') {
+        const nodes = bridge && bridge.nodes;
+        if (!nodes) return null;
+        let bestId = null;
+        let bestTs = -Infinity;
+        for (const key of Object.keys(nodes)) {
+            const data = (nodes[key] && nodes[key].data) || nodes[key];
+            if (!data || typeof data.node_id !== 'number') continue;
+            const ts = data.date_commissioned ? Date.parse(data.date_commissioned) : NaN;
+            if (Number.isFinite(ts) && ts > bestTs) {
+                bestTs = ts;
+                bestId = String(data.node_id);
+            }
+        }
+        if (bestId == null) {
+            node.warn('discover: no commissioned nodes for "last"');
+            return null;
+        }
+        return bestId;
+    }
+    node.warn('discover: unrecognized filter value: ' + JSON.stringify(raw));
+    return null;
+}
+
+/**
+ * Resolve filter from (msg.nodeId | numeric msg.payload | string msg.payload "last"/"42" | config.filter).
+ * Returns { value: string|null, source: 'msg.nodeId'|'msg.payload'|'config'|'none' }.
+ */
+function pickFilterRaw(node, msg) {
+    if (msg.nodeId !== undefined && msg.nodeId !== null && msg.nodeId !== '') {
+        return { raw: msg.nodeId, source: 'msg.nodeId' };
+    }
+    if (typeof msg.payload === 'number' && Number.isFinite(msg.payload)) {
+        return { raw: msg.payload, source: 'msg.payload' };
+    }
+    if (typeof msg.payload === 'string') {
+        const s = msg.payload.trim();
+        if (/^\d+$/.test(s) || s.toLowerCase() === 'last') {
+            return { raw: s, source: 'msg.payload' };
+        }
+    }
+    if (node.filter) return { raw: node.filter, source: 'config' };
+    return { raw: null, source: 'none' };
+}
+
 module.exports = function (RED) {
-    function matterDiscover(config) {
+    function matterjsDiscover(config) {
         RED.nodes.createNode(this, config);
         const node = this;
         node.controller = RED.nodes.getNode(config.controller);
@@ -155,6 +225,25 @@ module.exports = function (RED) {
                 return;
             }
 
+            // msg-based config overrides (everything except name/controller)
+            let effectiveFormat = node.format;
+            if (typeof msg.format === 'string' && VALID_FORMATS.has(msg.format)) {
+                effectiveFormat = msg.format;
+            } else if (msg.format !== undefined) {
+                node.warn('discover: ignoring invalid msg.format ' + JSON.stringify(msg.format));
+            }
+
+            let effectiveEhConfig = node.eventHandlerId;
+            if (typeof msg.eventHandlerId === 'string' && msg.eventHandlerId !== '') {
+                effectiveEhConfig = msg.eventHandlerId.trim();
+            }
+
+            // Filter (msg.nodeId > msg.payload numeric/"last" > config.filter), supports "last"
+            const picked = pickFilterRaw(node, msg);
+            const effectiveFilter = resolveFilter(node, bridge, picked.raw);
+
+            const ehId = resolveEventHandlerId(RED, effectiveEhConfig);
+
             const nodes = bridge.nodes;
             const templates = node.controller.getTemplates();
             const shapeIndex = node.controller.getShapeIndex();
@@ -163,6 +252,7 @@ module.exports = function (RED) {
             const output = [];
             const summary = [];
             const skipped = [];
+            const rawNodes = [];
 
             for (const key of Object.keys(nodes)) {
                 const matterNode = nodes[key];
@@ -173,9 +263,10 @@ module.exports = function (RED) {
                     node_id: data.node_id,
                     attributes: data.attributes || matterNode.attributes || {},
                     available: data.available,
+                    date_commissioned: data.date_commissioned,
                 };
                 if (typeof matterNodeFlat.node_id !== 'number') continue;
-                if (node.filter && String(matterNodeFlat.node_id) !== node.filter) continue;
+                if (effectiveFilter && String(matterNodeFlat.node_id) !== effectiveFilter) continue;
 
                 const shape = computeShape(matterNodeFlat);
                 const ident = extractIdentity(matterNodeFlat);
@@ -189,6 +280,23 @@ module.exports = function (RED) {
                     suggested_thingtype: ttId || null,
                 });
 
+                if (effectiveFormat === 'node') {
+                    rawNodes.push({
+                        node_id: matterNodeFlat.node_id,
+                        vendor: ident.vendorName,
+                        product: ident.productName,
+                        firmware: ident.firmwareVersion,
+                        hardware: ident.hardwareVersion,
+                        serial: ident.serialNumber,
+                        shape,
+                        suggested_thingtype: ttId || null,
+                        available: matterNodeFlat.available,
+                        date_commissioned: matterNodeFlat.date_commissioned,
+                        attributes: matterNodeFlat.attributes,
+                    });
+                    continue;
+                }
+
                 if (!ttId) {
                     skipped.push({ node_id: matterNodeFlat.node_id, shape, reason: 'no template matches shape' });
                     continue;
@@ -199,25 +307,37 @@ module.exports = function (RED) {
                     continue;
                 }
 
-                if (node.format === 'hal2') {
+                if (effectiveFormat === 'hal2') {
                     if (!ttIds.has(ttId)) {
                         const libIdMap = new Map();
                         output.push(buildThingTypeNode(template, libIdMap));
                         ttIds.add(ttId);
                     }
-                    output.push(buildThingNode(matterNodeFlat, template, node.eventHandlerId, shape));
+                    output.push(buildThingNode(matterNodeFlat, template, ehId, shape));
                 }
             }
 
-            if (node.format === 'summary') {
+            if (effectiveFormat === 'summary') {
                 msg.payload = summary;
+            } else if (effectiveFormat === 'node') {
+                msg.payload = rawNodes;
+                msg.summary = summary;
             } else {
                 msg.payload = output;
                 msg.summary = summary;
                 msg.skipped = skipped;
             }
 
-            node.status({ fill: 'green', shape: 'dot', text: `${summary.length} nodes, ${skipped.length} skipped` });
+            // Status reflects filter resolution (esp. useful for "last")
+            const filterDesc = picked.source === 'none'
+                ? 'all'
+                : (picked.raw === effectiveFilter || String(picked.raw) === effectiveFilter)
+                    ? String(effectiveFilter)
+                    : `${picked.raw} → ${effectiveFilter || '∅'}`;
+            node.status({
+                fill: 'green', shape: 'dot',
+                text: `${effectiveFormat} (${filterDesc}) — ${summary.length} nodes, ${skipped.length} skipped`,
+            });
             send(msg);
             done && done();
         });
@@ -225,5 +345,5 @@ module.exports = function (RED) {
         node.status({ fill: 'grey', shape: 'ring', text: 'idle' });
     }
 
-    RED.nodes.registerType('matterDiscover', matterDiscover);
+    RED.nodes.registerType('matterjsDiscover', matterjsDiscover);
 };
