@@ -3,8 +3,9 @@
 const crypto = require('crypto');
 const { computeShape, extractIdentity } = require('../lib/shape');
 const { buildInventory } = require('../lib/inventory');
+const { attributeToMsg, aliveToMsg } = require('../lib/normalize');
 
-const VALID_FORMATS = new Set(['hal2', 'summary', 'node', 'inventory']);
+const VALID_FORMATS = new Set(['hal2', 'summary', 'node', 'inventory', 'resync']);
 
 function genId(prefix) {
     return `${prefix}_${crypto.randomBytes(5).toString('hex')}`;
@@ -258,6 +259,42 @@ module.exports = function (RED) {
             // Filter (msg.nodeId > msg.payload numeric/"last" > config.filter), supports "last"
             const picked = pickFilterRaw(node, msg);
             const effectiveFilter = resolveFilter(node, bridge, picked.raw);
+
+            // Resync: replay the current node cache as hal2-format messages (alive + attribute
+            // values), re-seeding downstream Things. Mirrors the old "inject get_nodes" trick.
+            // Honours the node-id filter above; wire this node's output into your Things' stream.
+            if (effectiveFormat === 'resync') {
+                const replay = [];
+                for (const key of Object.keys(bridge.nodes)) {
+                    const data = bridge.nodes[key] && (bridge.nodes[key].data || bridge.nodes[key]);
+                    if (!data || typeof data.node_id !== 'number') continue;
+                    const nodeId = data.node_id;
+                    if (effectiveFilter && String(nodeId) !== effectiveFilter) continue;
+                    const attrs = data.attributes || {};
+                    const available = !!data.available;
+                    const eps = new Set();
+                    for (const k of Object.keys(attrs)) {
+                        const m = k.match(/^(\d+)\/29\/0$/);
+                        if (m && Number(m[1]) !== 0) eps.add(Number(m[1]));
+                    }
+                    for (const ep of eps) replay.push(aliveToMsg(nodeId, ep, available));
+                    // Real attribute values — skip global attrs/clusters (>= 0xFFF8: AttributeList etc).
+                    for (const k of Object.keys(attrs)) {
+                        const m = k.match(/^(\d+)\/(\d+)\/(\d+)$/);
+                        if (!m) continue;
+                        const cluster = Number(m[2]), attribute = Number(m[3]);
+                        if (cluster >= 0xFFF8 || attribute >= 0xFFF8) continue;
+                        replay.push(attributeToMsg({ nodeId, endpoint: Number(m[1]), cluster, attribute, value: attrs[k] }));
+                    }
+                }
+                node.status({
+                    fill: 'blue', shape: 'dot',
+                    text: `resync (${effectiveFilter || 'all'}) — ${replay.length} msgs`,
+                });
+                send([replay]);   // emit every message on output 0
+                done && done();
+                return;
+            }
 
             const ehId = resolveEventHandlerId(RED, effectiveEhConfig);
 
