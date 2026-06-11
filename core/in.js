@@ -114,6 +114,14 @@ module.exports = function (RED) {
         node.controller.on('matter:node_added', onNodesChanged);
         node.controller.on('matter:node_updated', onNodesChanged);
 
+        // Initial emit: if the controller is already connected when this node starts (e.g. you just
+        // enabled "Emit metadata" and redeployed), onStatus('connected') won't fire again — so kick
+        // off an emit ourselves once the bridge cache is populated.
+        if (node.emitMeta) {
+            const b = node.controller.getBridge && node.controller.getBridge();
+            if (b && b.nodes && Object.keys(b.nodes).length) scheduleMetaEmit(3000);
+        }
+
         node.on('close', function () {
             node.controller.removeListener('matter:attribute', onAttribute);
             node.controller.removeListener('matter:nodeevent', onNodeEvent);
