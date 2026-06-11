@@ -2,8 +2,9 @@
 
 const crypto = require('crypto');
 const { computeShape, extractIdentity } = require('../lib/shape');
+const { buildInventory } = require('../lib/inventory');
 
-const VALID_FORMATS = new Set(['hal2', 'summary', 'node']);
+const VALID_FORMATS = new Set(['hal2', 'summary', 'node', 'inventory']);
 
 function genId(prefix) {
     return `${prefix}_${crypto.randomBytes(5).toString('hex')}`;
@@ -217,7 +218,7 @@ module.exports = function (RED) {
             return;
         }
 
-        node.on('input', function (msg, send, done) {
+        node.on('input', async function (msg, send, done) {
             const bridge = node.controller.getBridge();
             if (!bridge || !bridge.nodes) {
                 node.status({ fill: 'yellow', shape: 'ring', text: 'no nodes cache' });
@@ -231,6 +232,22 @@ module.exports = function (RED) {
                 effectiveFormat = msg.format;
             } else if (msg.format !== undefined) {
                 node.warn('discover: ignoring invalid msg.format ' + JSON.stringify(msg.format));
+            }
+
+            // Inventory: flat list of every node (vendor/model/part/fw + IPv6). Reuses the shared
+            // builder; set msg.readNetwork to read 0/51/0 on demand for nodes missing it in cache.
+            if (effectiveFormat === 'inventory') {
+                try {
+                    const inventory = await buildInventory(node.controller, { readMissingNetwork: !!msg.readNetwork });
+                    msg.payload = inventory;
+                    node.status({ fill: 'green', shape: 'dot', text: `inventory — ${inventory.length} nodes` });
+                    send(msg);
+                    done && done();
+                } catch (e) {
+                    node.status({ fill: 'red', shape: 'ring', text: 'inventory failed' });
+                    done && done(e);
+                }
+                return;
             }
 
             let effectiveEhConfig = node.eventHandlerId;

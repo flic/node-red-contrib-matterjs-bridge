@@ -2,6 +2,7 @@
 
 const { createBridge } = require('../lib/matter-client');
 const { loadTemplates, buildShapeIndex } = require('../lib/templates');
+const { buildInventory } = require('../lib/inventory');
 
 module.exports = function (RED) {
     function matterjsController(config) {
@@ -185,4 +186,20 @@ module.exports = function (RED) {
     }
 
     RED.nodes.registerType('matterjsController', matterjsController);
+
+    // Device inventory for the editor sidebar (and ad-hoc inspection). Backs the "Matter Devices"
+    // sidebar tab in controller.html. ?readNetwork=true reads 0/51/0 on demand for missing IPv6.
+    RED.httpAdmin.get('/matterjs-bridge/:id/inventory', RED.auth.needsPermission('flows.read'), async function (req, res) {
+        const controller = RED.nodes.getNode(req.params.id);
+        if (!controller || controller.type !== 'matterjsController') {
+            res.status(404).json({ error: 'controller not found' });
+            return;
+        }
+        try {
+            const inventory = await buildInventory(controller, { readMissingNetwork: req.query.readNetwork === 'true' });
+            res.json(inventory);
+        } catch (e) {
+            res.status(500).json({ error: String((e && e.message) || e) });
+        }
+    });
 };

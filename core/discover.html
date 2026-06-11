@@ -55,6 +55,7 @@
             <option value="hal2">hal2 (importable Node-RED flow snippet)</option>
             <option value="summary">summary (per-node metadata only)</option>
             <option value="node">node (full raw node data — for template development)</option>
+            <option value="inventory">inventory (flat device list: vendor/model/part/fw + IPv6)</option>
         </select>
     </div>
     <div class="form-row">
@@ -68,13 +69,18 @@
 </script>
 
 <script type="text/html" data-help-name="matterjsDiscover">
-    <p>Generates output describing commissioned Matter nodes, in one of three formats:</p>
+    <p>Generates output describing commissioned Matter nodes, in one of four formats:</p>
     <ul>
         <li><b>hal2</b>: an importable Node-RED flow snippet (<code>hal2Thing</code> + <code>hal2ThingType</code> configs).
         Self-contained — local ingress/egress functions, no <code>hal2EventHandler</code> library mutations required.</li>
         <li><b>summary</b>: lightweight per-node metadata (<code>node_id, vendor, product, shape, suggested_thingtype</code>).</li>
         <li><b>node</b>: full raw node data including the entire attribute map. Use this when you're developing a
         new device template — copy the attributes blob to inspect cluster/attribute IDs.</li>
+        <li><b>inventory</b>: a flat list of every node with <code>vendor, product, product_label, part_number,
+        firmware, hardware, serial, transport, ipv6, ipv4, available, shape, suggested_thingtype</code>.
+        <code>transport</code> (<code>thread</code>/<code>wifi</code>/<code>ethernet</code>) and the IPv6/IPv4
+        addresses come from Matter GeneralDiagnostics (<code>0/51/0</code>). Set <code>msg.readNetwork = true</code>
+        to read that attribute on demand for nodes whose address isn't already cached.</li>
     </ul>
 
     <h4>Importing the hal2 snippet</h4>
@@ -105,7 +111,8 @@
     <h4>msg overrides</h4>
     <p>Any config field (except <i>name</i> and <i>controller</i>) can be overridden per invocation:</p>
     <ul>
-        <li><code>msg.format</code> — <code>"hal2"</code>, <code>"summary"</code>, or <code>"node"</code>.</li>
+        <li><code>msg.format</code> — <code>"hal2"</code>, <code>"summary"</code>, <code>"node"</code>, or <code>"inventory"</code>.</li>
+        <li><code>msg.readNetwork</code> — (inventory only) read IPv6/IPv4 from <code>0/51/0</code> on demand when not cached.</li>
         <li><code>msg.eventHandlerId</code> — explicit hal2EventHandler id.</li>
         <li><code>msg.nodeId</code> — Matter node id filter (numeric or <code>"last"</code>). Takes precedence over msg.payload.</li>
         <li><code>msg.payload</code> — if numeric or string matching <code>"last"</code> / digits, used as the filter.

@@ -53,6 +53,93 @@
     });
 </script>
 
+<script type="text/javascript">
+// Editor sidebar: a live device table per matterjs controller (node_id, model, IPv6, fw, online).
+// Pulls from the controller's /matterjs-bridge/:id/inventory admin endpoint.
+(function () {
+    function buildSidebar() {
+        try {
+            if (!RED.sidebar || typeof RED.sidebar.addTab !== 'function') return;
+            if ($('#matterjs-devices-content').length) return;
+
+            var content = $('<div>', { id: 'matterjs-devices-content', style: 'padding:8px; font-size:13px;' });
+            var bar = $('<div>', { style: 'display:flex; gap:6px; align-items:center; margin-bottom:8px;' }).appendTo(content);
+            var sel = $('<select>', { id: 'matterjs-devices-controller', style: 'flex:1; min-width:0;' }).appendTo(bar);
+            var refresh = $('<button>', { class: 'red-ui-button red-ui-button-small', title: 'Refresh' })
+                .html('<i class="fa fa-refresh"></i>').appendTo(bar);
+            var net = $('<label>', { style: 'white-space:nowrap; font-size:11px; color:#888;' });
+            $('<input>', { type: 'checkbox', id: 'matterjs-devices-readnet', style: 'vertical-align:middle;' }).appendTo(net);
+            net.append(' read IPv6').appendTo(bar);
+            $('<div>', { id: 'matterjs-devices-table' }).appendTo(content);
+
+            function populateControllers() {
+                var prev = sel.val();
+                sel.empty();
+                var count = 0;
+                RED.nodes.eachConfig(function (cfg) {
+                    if (cfg.type === 'matterjsController') {
+                        count++;
+                        sel.append($('<option>', { value: cfg.id, text: cfg.name || cfg.url || cfg.id }));
+                    }
+                });
+                if (!count) sel.append($('<option>', { value: '', text: '(no matterjs controllers)' }));
+                if (prev) sel.val(prev);
+            }
+
+            function render(rows) {
+                var t = $('<table>', { style: 'width:100%; border-collapse:collapse;' });
+                var head = $('<tr>').appendTo(t);
+                ['id', 'Model', 'Net', 'IPv6', 'fw', ''].forEach(function (h) {
+                    $('<th>', { text: h, style: 'text-align:left; border-bottom:1px solid #ccc; padding:2px 4px; color:#888; font-weight:normal;' }).appendTo(head);
+                });
+                rows.forEach(function (r) {
+                    var model = [r.vendor, r.product].filter(Boolean).join(' ');
+                    if (r.part_number) model += ' (' + r.part_number + ')';
+                    var tr = $('<tr>').appendTo(t);
+                    $('<td>', { text: r.node_id, style: 'padding:2px 4px; font-family:monospace;' }).appendTo(tr);
+                    $('<td>', { text: model, style: 'padding:2px 4px;' }).appendTo(tr);
+                    $('<td>', { text: r.transport || '', style: 'padding:2px 4px; font-size:11px; color:#666;' }).appendTo(tr);
+                    $('<td>', { text: (r.ipv6 || []).join(', '), style: 'padding:2px 4px; font-family:monospace; font-size:11px; word-break:break-all;' }).appendTo(tr);
+                    $('<td>', { text: r.firmware || '', style: 'padding:2px 4px; font-size:11px;' }).appendTo(tr);
+                    $('<td>', { html: r.available ? '<span style="color:#5a5">&#9679;</span>' : '<span style="color:#c55">&#9679;</span>', style: 'padding:2px 4px; text-align:center;' }).appendTo(tr);
+                });
+                $('#matterjs-devices-table').empty().append(t);
+            }
+
+            function load() {
+                var id = sel.val();
+                if (!id) { $('#matterjs-devices-table').html('<div style="color:#888;">No controller selected.</div>'); return; }
+                var url = 'matterjs-bridge/' + id + '/inventory' + ($('#matterjs-devices-readnet').is(':checked') ? '?readNetwork=true' : '');
+                $('#matterjs-devices-table').html('<div style="color:#888;">Loading…</div>');
+                $.getJSON(url).done(function (rows) {
+                    if (!Array.isArray(rows) || !rows.length) { $('#matterjs-devices-table').html('<div style="color:#888;">No devices.</div>'); return; }
+                    render(rows);
+                }).fail(function (xhr) {
+                    var err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.status;
+                    $('#matterjs-devices-table').html('<div style="color:#c55;">Error: ' + err + '</div>');
+                });
+            }
+
+            refresh.on('click', load);
+            sel.on('change', load);
+
+            RED.sidebar.addTab({
+                id: 'matterjs-devices',
+                label: 'matter',
+                name: 'Matter Devices',
+                iconClass: 'fa fa-sitemap',
+                content: content[0],
+                closeable: true,
+                visible: false,
+                onchange: function () { populateControllers(); load(); }
+            });
+            populateControllers();
+        } catch (e) { /* sidebar is best-effort; never break the editor */ }
+    }
+    if (typeof RED !== 'undefined' && RED.sidebar) { buildSidebar(); }
+})();
+</script>
+
 <script type="text/html" data-template-name="matterjsController">
     <div class="form-row">
         <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>

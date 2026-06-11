@@ -7,9 +7,11 @@ Node-RED bridge between [matterjs-server](https://github.com/matter-js/matterjs-
 Four Node-RED nodes:
 
 - **matterjs controller** (config) — connection to the matterjs-server WS API, node cache, optional attribute polling.
-- **matterjs in** (runtime) — emits attribute updates and node events from your Matter fabric as plain Node-RED messages.
+- **matterjs in** (runtime) — emits attribute updates and node events from your Matter fabric as plain Node-RED messages. Can optionally publish per-device **metadata** (model, IPv6, …) into hal2 — see [Device inventory & IPv6](#device-inventory--ipv6).
 - **matterjs out** (runtime) — receives commands (`device_command`, `write_attribute`, `read_attribute`) and dispatches them to matterjs-server.
-- **matterjs discover** (runtime) — generates an **importable JSON snippet** for newly commissioned devices. Run Import → Clipboard in the Node-RED editor and the Thing is ready to deploy.
+- **matterjs discover** (runtime) — generates an **importable JSON snippet** for newly commissioned devices, or a flat device **inventory**. Run Import → Clipboard in the Node-RED editor and the Thing is ready to deploy.
+
+The **matterjs controller** also adds a **Matter Devices** sidebar tab to the Node-RED editor — a live table of every commissioned node (id, model, IPv6, firmware, online) for the selected controller.
 
 ## Topic schema
 
@@ -50,6 +52,34 @@ Set the `MATTER_WS_URL` env variable (or fill in the WS URL directly on the matt
 3. The debug panel shows a JSON array.
 4. Copy the array, open Node-RED's Import dialog (`Ctrl+I`), pick "Clipboard", paste, Import.
 5. The new `hal2Thing` + `hal2ThingType` nodes appear in the editor. Review, Deploy.
+
+## Device inventory & IPv6
+
+Beyond per-device discovery, you can list **everything** at once with model and network details — no manual export.
+
+**Inventory format.** Set `matterjs discover` to the **inventory** format (or send `msg.format = "inventory"`). It outputs a flat array, one entry per node:
+
+```json
+{ "node_id": 35, "vendor": "Shelly", "product": "Shelly Dimmer Gen4",
+  "product_label": "", "part_number": "", "firmware": "1.3.0-s1", "hardware": "v4",
+  "serial": "…", "transport": "wifi", "ipv6": ["fd90::…"], "ipv4": [], "available": true,
+  "shape": "(1,257+meter)", "suggested_thingtype": "matter_metered_dim_light_thingtype" }
+```
+
+`transport` (`thread` / `wifi` / `ethernet`) and the IPv6/IPv4 addresses come from Matter **GeneralDiagnostics** `NetworkInterfaces` (`0/51/0`) — the interface `Type` field, with a fallback to ThreadNetworkDiagnostics (`0/53`) / WiFiNetworkDiagnostics (`0/54`) cluster presence. If a node's address isn't already cached, send `msg.readNetwork = true` to read it on demand.
+
+**Editor sidebar.** The controller registers a **Matter Devices** sidebar tab with the same data as a live table. It's backed by an admin endpoint — `GET /matterjs-bridge/<controllerId>/inventory` (`?readNetwork=true` optional) — which you can also call directly.
+
+**Push into hal2 metadata.** Enable **Emit metadata** on a `matterjs in` node and it publishes, per device, an object payload to the reserved hal2 topic `matter/<id>/_meta`:
+
+```json
+{ "source": "matter", "transport": "wifi", "model": "Shelly Dimmer Gen4",
+  "vendor": "Shelly", "serial": "…", "firmware": "1.3.0-s1", "ipv6": "fd90::…" }
+```
+
+`source: "matter"` tags every device with its origin (handy later for filtering by integration), and `transport` records `thread` / `wifi` / `ethernet`.
+
+[hal2](https://www.npmjs.com/package/node-red-contrib-hal2) stores this generically as read-only **metadata** on the matching Thing (visible in the Thing editor and via the hal2 MCP `get_all_states`). hal2 *merges* the object into the Thing's metadata; the bridge sends empty fields as `null` so stale keys are pruned on each (re)connect. Enable it on **one** `matterjs in` that feeds your Things, to avoid duplicate emissions. hal2 stays technology-neutral: it never parses these keys — all Matter/Thread/IPv6 specifics live here in the bridge.
 
 ## Templates
 
