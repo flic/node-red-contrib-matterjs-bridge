@@ -155,9 +155,12 @@ module.exports = function (RED) {
                 }
                 for (const ep of eps) {
                     try {
-                        const v = await bridge.readAttribute(nodeId, ep, cluster, attribute);
+                        // readAttribute(nodeId, "ep/cluster/attr") -> { "ep/cluster/attr": value }
+                        const path = `${ep}/${cluster}/${attribute}`;
+                        const rec = await bridge.readAttribute(nodeId, path);
+                        const value = (rec && typeof rec === 'object') ? rec[path] : rec;
                         // Synthesise the attribute_changed event for downstream listeners
-                        node.emit('matter:attribute', { nodeId, endpoint: ep, cluster, attribute, value: v });
+                        node.emit('matter:attribute', { nodeId, endpoint: ep, cluster, attribute, value });
                     } catch (e) {
                         // Per-attribute polling errors are non-fatal; just log.
                         node.debug(`poll ${nodeId}/${ep}/${cluster}/${attribute} failed: ${e.message}`);
