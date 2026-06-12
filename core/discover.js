@@ -291,7 +291,7 @@ module.exports = function (RED) {
                     fill: 'blue', shape: 'dot',
                     text: `resync (${effectiveFilter || 'all'}) — ${replay.length} msgs`,
                 });
-                send([replay]);   // emit every message on output 0
+                send([null, replay]);   // resync events on output 2 (keep them off the result output)
                 done && done();
                 return;
             }

@@ -11,7 +11,8 @@
             filter: { value: '' }
         },
         inputs: 1,
-        outputs: 1,
+        outputs: 2,
+        outputLabels: ['result', 'resync events'],
         icon: 'parser-json.svg',
         label: function () {
             return this.name || 'matterjs discover';
@@ -83,11 +84,12 @@
         addresses come from Matter GeneralDiagnostics (<code>0/51/0</code>). Set <code>msg.readNetwork = true</code>
         to read that attribute on demand for nodes whose address isn't already cached.</li>
         <li><b>resync</b>: replays the controller's current node cache as live-style messages — an
-        <code>alive</code> per endpoint plus every cached attribute value — emitted individually on the output.
-        Wire the output into your Things' input stream (e.g. a <code>matter:event</code>/<code>matter:state</code>
-        link) to re-seed them on demand, mirroring the old "inject <code>get_nodes</code>" trick. Handy after a
-        restart, when Things sit at <i>no value</i> until devices next push. Honours the Matter node id filter,
-        so an inject with <code>payload = 12</code> resyncs just node 12.</li>
+        <code>alive</code> per endpoint plus every cached attribute value — emitted individually on the
+        <b>second output</b> (<i>resync events</i>), kept separate from the descriptive formats above. Wire that
+        output into your Things' input stream (e.g. a <code>matter:event</code>/<code>matter:state</code> link)
+        to re-seed them on demand, mirroring the old "inject <code>get_nodes</code>" trick. Handy after a restart,
+        when Things sit at <i>no value</i> until devices next push. Honours the Matter node id filter, so an
+        inject with <code>payload = 12</code> resyncs just node 12.</li>
     </ul>
 
     <h4>Importing the hal2 snippet</h4>
@@ -126,11 +128,16 @@
         Simplest path from an inject node (set payload type to number or string).</li>
     </ul>
 
-    <h4>Output</h4>
-    <p>hal2: <code>msg.payload</code> = array of flow nodes, <code>msg.summary</code> = per-node list,
+    <h4>Outputs</h4>
+    <p>This node has two outputs. <b>Output 1 (result)</b> carries the descriptive formats below; <b>output 2
+    (resync events)</b> carries only the <i>resync</i> messages, so live event traffic never mixes into your
+    inspection/import output.</p>
+    <p>hal2 (output 1): <code>msg.payload</code> = array of flow nodes, <code>msg.summary</code> = per-node list,
     <code>msg.skipped</code> = nodes skipped with reason.</p>
-    <p>summary: <code>msg.payload</code> = <code>[{node_id, vendor, product, shape, suggested_thingtype}]</code>.</p>
-    <p>node: <code>msg.payload</code> = <code>[{node_id, vendor, product, firmware, hardware, serial, shape,
+    <p>summary (output 1): <code>msg.payload</code> = <code>[{node_id, vendor, product, shape, suggested_thingtype}]</code>.</p>
+    <p>node (output 1): <code>msg.payload</code> = <code>[{node_id, vendor, product, firmware, hardware, serial, shape,
     suggested_thingtype, available, date_commissioned, attributes}]</code>, plus
     <code>msg.summary</code> as above.</p>
+    <p>inventory (output 1): <code>msg.payload</code> = flat per-node array (vendor/model/part/fw, transport, ipv6/ipv4).</p>
+    <p>resync (output 2): a stream of <code>{topic, payload, matter}</code> messages (alive + attribute values).</p>
 </script>

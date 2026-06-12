@@ -9,7 +9,7 @@ Four Node-RED nodes:
 - **matterjs controller** (config) — connection to the matterjs-server WS API, node cache, optional attribute polling.
 - **matterjs in** (runtime) — emits attribute updates and node events from your Matter fabric as plain Node-RED messages. Can optionally publish per-device **metadata** (model, IPv6, …) into hal2 — see [Device inventory & IPv6](#device-inventory--ipv6).
 - **matterjs out** (runtime) — receives commands (`device_command`, `write_attribute`, `read_attribute`) and dispatches them to matterjs-server.
-- **matterjs discover** (runtime) — generates an **importable JSON snippet** for newly commissioned devices, a flat device **inventory**, or a **resync** that replays the current node cache (alive + attributes) to re-seed downstream Things (e.g. after a restart). Run Import → Clipboard in the Node-RED editor and the Thing is ready to deploy.
+- **matterjs discover** (runtime) — generates an **importable JSON snippet** for newly commissioned devices, a flat device **inventory**, or a **resync** that replays the current node cache (alive + attributes) to re-seed downstream Things (e.g. after a restart). It has two outputs: descriptive formats on output 1, and resync events on a dedicated output 2 (wire that into your Things' stream). Run Import → Clipboard in the Node-RED editor and the Thing is ready to deploy.
 
 The **matterjs controller** also adds a **Matter Devices** sidebar tab to the Node-RED editor — a live table of every commissioned node (id, model, IPv6, firmware, online) for the selected controller.
 
