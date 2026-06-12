@@ -9,7 +9,8 @@
             format: { value: 'hal2' },
             topicFilter: { value: '' },
             nodeIdFilter: { value: '' },
-            errorOutput: { value: false }
+            errorOutput: { value: false },
+            emitMeta: { value: false }
         },
         inputs: 0,
         outputs: 1,
@@ -63,6 +64,11 @@
         <input type="checkbox" id="node-input-errorOutput" style="display:inline-block; width:auto; vertical-align:top;">
         <span id="node-input-errorOutput-hint" style="margin-left:8px; color:#999;"></span>
     </div>
+    <div class="form-row">
+        <label for="node-input-emitMeta"><i class="fa fa-info-circle"></i> Emit metadata</label>
+        <input type="checkbox" id="node-input-emitMeta" style="display:inline-block; width:auto; vertical-align:top;">
+        <span style="margin-left:8px; color:#999;">Publish <code>matter/&lt;id&gt;/_meta</code> (model, ipv6, serial …)</span>
+    </div>
 </script>
 
 <script type="text/html" data-help-name="matterjsIn">
@@ -82,4 +88,15 @@ msg.payload = { type, source, message, ts }</pre>
     <p>Common <code>type</code> values: <code>disconnected</code>, <code>bridge_error</code>,
     <code>bridge_create_failed</code>, <code>start_listening_failed</code>. The same errors are also visible
     via the controller's status (e.g. yellow ring "disconnected" / "reconnect in 4s").</p>
+
+    <h4>Emit metadata (optional)</h4>
+    <p>When enabled, publishes one message per node on the reserved hal2 topic
+    <code>matter/&lt;id&gt;/_meta</code> with an object payload <code>{ source: "matter", transport, model,
+    vendor, product, part_number, serial, firmware, hardware, ipv6, ipv4 }</code>, on (re)connect and whenever
+    nodes change. <code>source</code> marks the device as Matter-originated and <code>transport</code> is
+    <code>thread</code>/<code>wifi</code>/<code>ethernet</code>. hal2 Things
+    store this generically as read-only <b>metadata</b> (visible in the Thing editor and via the hal2 MCP
+    <code>get_all_states</code>). hal2 <i>merges</i> the object into the Thing's metadata; empty fields are
+    sent as <code>null</code> so stale keys are pruned. Enable this on exactly one matterjs-in that feeds
+    your hal2 Things to avoid duplicate emissions.</p>
 </script>
