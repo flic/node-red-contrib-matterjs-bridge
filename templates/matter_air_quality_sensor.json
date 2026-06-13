@@ -2,7 +2,7 @@
   "id": "matter_air_quality_sensor_thingtype",
   "name": "Matter Air Quality Sensor",
   "shape": "(1,44)",
-  "nodestatus": "🌫 %AirQuality% 🌡 %Temperature%°C 💧 %Humidity%% CO₂ %CO2%ppm",
+  "nodestatus": "🌫 %AirQualityText% 🌡 %Temperature%°C 💧 %Humidity%% CO₂ %CO2%ppm",
   "items": [
     {
       "name": "AirQuality",
@@ -12,6 +12,18 @@
       "attr": 0,
       "haType": "sensor",
       "ingress": "Pass-through",
+      "notes": "Matter AirQualityEnum 0-6 (0=Unknown,1=Good,2=Fair,3=Moderate,4=Poor,5=VeryPoor,6=ExtremelyPoor)",
+      "readOnly": true
+    },
+    {
+      "name": "AirQualityText",
+      "id": "maqs_airquality_text",
+      "endpoint": 1,
+      "cluster": 91,
+      "attr": 0,
+      "haType": "sensor",
+      "ingress": "Matter air quality enum → label",
+      "notes": "Human-readable label for the AirQuality enum (same source attribute 91/0).",
       "readOnly": true
     },
     {
@@ -58,7 +70,8 @@
   "functions": {
     "ingress": [
       { "name": "Pass-through", "fn": "return msg.payload;" },
-      { "name": "Matter centi → unit", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn v / 100;" }
+      { "name": "Matter centi → unit", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn v / 100;" },
+      { "name": "Matter air quality enum → label", "fn": "const labels = ['Unknown', 'Good', 'Fair', 'Moderate', 'Poor', 'Very poor', 'Extremely poor'];\nconst v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn labels[v] !== undefined ? labels[v] : 'Unknown';" }
     ],
     "egress": []
   }
