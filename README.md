@@ -99,7 +99,7 @@ The package ships with templates for these device types in `templates/`:
 - `matter_water_leak_sensor` — water leak sensor with battery
 - `matter_air_quality_sensor` — full air quality (AQ, temp, RH, CO2, PM2.5)
 - `matter_dual_button` — 2-button switch
-- `matter_motion_light_sensor` — motion + illuminance + battery
+- `matter_motion_light_sensor` — motion + illuminance + battery (both endpoint orderings: occupancy-on-EP1 *and* light-on-EP1)
 
 ### Custom templates
 
@@ -108,6 +108,8 @@ Configure "Templates directory" on the matterjs controller node — point it at 
 ### Template schema
 
 Each template JSON file follows this structure:
+
+`shape` may be a single string or an **array of strings** — use an array when the same device class is exposed with different endpoint orderings by different vendors (each shape maps onto this one template/ThingType).
 
 ```json
 {

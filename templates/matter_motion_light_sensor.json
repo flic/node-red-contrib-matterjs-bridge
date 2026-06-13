@@ -1,7 +1,7 @@
 {
   "id": "matter_motion_light_sensor_thingtype",
   "name": "Matter Motion + Light Sensor",
-  "shape": "(1,263),(2,262)",
+  "shape": ["(1,263),(2,262)", "(1,262),(2,263)"],
   "nodestatus": "🚶 %Motion% ☀ %Illuminance% lux 🔋 %Battery%%",
   "items": [
     {
