@@ -154,6 +154,19 @@ Common configurations:
 - `matterjs in` has no triggering input, so catch nodes can't be used to surface controller-side errors (connection lost, malformed WS payload, etc.). Enable the per-node **Error output** toggle to add a second output port that receives error msgs (`msg.payload = { type, source, message, ts }`).
 - The controller auto-reconnects on disconnect with exponential backoff (2s → 4s → 8s → 16s → 32s → 60s, capped at 60s). Status text shows `reconnect in Ns`. Reset to base interval on successful reconnect.
 
+## Logging
+
+The bundled `@matter-server/ws-client` logs **every** WebSocket frame (`WebSocket OnMessage …`) and **every** event (`Incoming event …`) via `console.debug`, with no off switch. Because that's raw console output (not routed through Node-RED's logger), Node-RED's log level can't suppress it — it floods the log, especially with metered devices pushing frequent power updates.
+
+To keep the log clean, the bridge installs a small one-time filter that drops **only** those two prefixes; all other `console.debug`/`console.log` output is untouched.
+
+If you need to see the raw frames/events again (e.g. debugging a device), set the environment variable **`MATTERJS_WS_DEBUG=1`** for the Node-RED process and restart — the filter then opts out and lets them through. In Docker, add it under the node-red service:
+
+```yaml
+environment:
+  - MATTERJS_WS_DEBUG=1
+```
+
 ## Requirements
 
 - Node-RED >= 4.0.0
