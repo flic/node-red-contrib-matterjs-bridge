@@ -156,9 +156,9 @@ Common configurations:
 
 ## Logging
 
-The bundled `@matter-server/ws-client` logs **every** WebSocket frame (`WebSocket OnMessage …`) and **every** event (`Incoming event …`) via `console.debug`, with no off switch. Because that's raw console output (not routed through Node-RED's logger), Node-RED's log level can't suppress it — it floods the log, especially with metered devices pushing frequent power updates.
+The bundled `@matter-server/ws-client` logs **every** incoming WebSocket frame (`WebSocket OnMessage …`), **every** outgoing command (`WebSocket send message …`) and **every** event (`Incoming event …`) via `console.debug`, with no off switch. Because that's raw console output (not routed through Node-RED's logger), Node-RED's log level can't suppress it — it floods the log, especially with metered devices pushing frequent power updates.
 
-To keep the log clean, the bridge installs a small one-time filter that drops **only** those two prefixes; all other `console.debug`/`console.log` output is untouched.
+To keep the log clean, the bridge installs a small one-time filter that drops those per-frame/command/event debug lines; the low-frequency connection lifecycle logs (Connected/Closed) and all other `console.debug`/`console.log` output are untouched.
 
 If you need to see the raw frames/events again (e.g. debugging a device), set the environment variable **`MATTERJS_WS_DEBUG=1`** for the Node-RED process and restart — the filter then opts out and lets them through. In Docker, add it under the node-red service:
 
