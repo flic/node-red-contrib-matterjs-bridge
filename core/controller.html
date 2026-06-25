@@ -62,15 +62,15 @@
             if (!RED.sidebar || typeof RED.sidebar.addTab !== 'function') return;
             if ($('#matterjs-devices-content').length) return;
 
-            var content = $('<div>', { id: 'matterjs-devices-content', style: 'padding:8px; font-size:13px;' });
-            var bar = $('<div>', { style: 'display:flex; gap:6px; align-items:center; margin-bottom:8px;' }).appendTo(content);
+            var content = $('<div>', { id: 'matterjs-devices-content', style: 'padding:8px; font-size:13px; height:100%; box-sizing:border-box; display:flex; flex-direction:column;' });
+            var bar = $('<div>', { style: 'display:flex; gap:6px; align-items:center; margin-bottom:8px; flex:0 0 auto;' }).appendTo(content);
             var sel = $('<select>', { id: 'matterjs-devices-controller', style: 'flex:1; min-width:0;' }).appendTo(bar);
             var refresh = $('<button>', { class: 'red-ui-button red-ui-button-small', title: 'Refresh' })
                 .html('<i class="fa fa-refresh"></i>').appendTo(bar);
             var net = $('<label>', { style: 'white-space:nowrap; font-size:11px; color:#888;' });
             $('<input>', { type: 'checkbox', id: 'matterjs-devices-readnet', style: 'vertical-align:middle;' }).appendTo(net);
             net.append(' read IPv6').appendTo(bar);
-            $('<div>', { id: 'matterjs-devices-table' }).appendTo(content);
+            $('<div>', { id: 'matterjs-devices-table', style: 'flex:1 1 auto; overflow:auto; min-height:0;' }).appendTo(content);
 
             function populateControllers() {
                 var prev = sel.val();
@@ -88,9 +88,9 @@
 
             function render(rows) {
                 var t = $('<table>', { style: 'width:100%; border-collapse:collapse;' });
-                var head = $('<tr>').appendTo(t);
+                var head = $('<tr>').appendTo($('<thead>').appendTo(t));
                 ['id', 'Model', 'Net', 'IPv6', 'fw', ''].forEach(function (h) {
-                    $('<th>', { text: h, style: 'text-align:left; border-bottom:1px solid #ccc; padding:2px 4px; color:#888; font-weight:normal;' }).appendTo(head);
+                    $('<th>', { text: h, style: 'text-align:left; border-bottom:1px solid #ccc; padding:2px 4px; color:#888; font-weight:normal; position:sticky; top:0; background:var(--red-ui-secondary-background, #fff); z-index:1;' }).appendTo(head);
                 });
                 rows.forEach(function (r) {
                     var model = [r.vendor, r.product].filter(Boolean).join(' ');

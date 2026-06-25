@@ -1,6 +1,6 @@
 'use strict';
 
-const { attributeToMsg, nodeEventToMsg, topicMatches } = require('../lib/normalize');
+const { attributeToMsg, nodeEventToMsg, aliveToMsg, topicMatches } = require('../lib/normalize');
 const { buildInventory, formatModel } = require('../lib/inventory');
 
 module.exports = function (RED) {
@@ -66,6 +66,45 @@ module.exports = function (RED) {
             return true;
         }
 
+        // Live online/offline propagation: matterjs-server flips a node's `available` and pushes
+        // node_updated → nodes_changed. We diff against last-known availability per node and emit an
+        // `_alive` message per endpoint only on transition (and once on first sight, to seed hal2 at
+        // startup without a manual resync). Mirrors the endpoint enumeration of the discover `resync`.
+        const lastAvail = new Map();
+        function emitAliveChanges() {
+            if (node.format === 'raw') return; // `_alive` is a hal2-format concept
+            const b = node.controller.getBridge && node.controller.getBridge();
+            if (!b || !b.nodes) return;
+            for (const key of Object.keys(b.nodes)) {
+                const mn = b.nodes[key];
+                if (!mn) continue;
+                const data = mn.data || mn;
+                const nodeId = data.node_id;
+                if (typeof nodeId !== 'number') continue;
+                if (node.nodeIdFilter && String(nodeId) !== node.nodeIdFilter) continue;
+                const available = !!data.available;
+                if (lastAvail.get(nodeId) === available) continue; // no change
+                lastAvail.set(nodeId, available);
+                const attrs = data.attributes || mn.attributes || {};
+                const eps = new Set();
+                for (const k of Object.keys(attrs)) {
+                    const m = k.match(/^(\d+)\/29\/0$/);
+                    if (m && Number(m[1]) !== 0) eps.add(Number(m[1]));
+                }
+                if (!eps.size) eps.add(1); // fallback so offline is still signalled
+                for (const ep of eps) {
+                    const msg = aliveToMsg(nodeId, ep, available);
+                    if (!shouldEmit(msg)) continue;
+                    if (node.errorOutput) node.send([msg, null]); else node.send(msg);
+                }
+            }
+        }
+        let aliveSeedTimer = null;
+        function scheduleAliveSeed(delay) {
+            if (aliveSeedTimer) return;
+            aliveSeedTimer = setTimeout(() => { aliveSeedTimer = null; emitAliveChanges(); }, delay || 1500);
+        }
+
         const onAttribute = (ev) => {
             let msg;
             if (node.format === 'raw') {
@@ -92,11 +131,12 @@ module.exports = function (RED) {
 
         const onStatus = (s) => {
             try { node.status(s); } catch (_) {}
-            // Re-publish metadata once the controller (re)connects — cache is freshly populated.
-            if (s && s.text === 'connected') scheduleMetaEmit(2500);
+            // Re-publish metadata + re-seed alive state once the controller (re)connects — the
+            // cache is freshly populated by startListening (slightly delayed so it has settled).
+            if (s && s.text === 'connected') { scheduleMetaEmit(2500); scheduleAliveSeed(1500); }
         };
 
-        const onNodesChanged = () => scheduleMetaEmit(1500);
+        const onNodesChanged = () => { scheduleMetaEmit(1500); emitAliveChanges(); };
 
         const onError = (errPayload) => {
             if (!node.errorOutput) return;
@@ -113,13 +153,17 @@ module.exports = function (RED) {
         node.controller.on('matter:error', onError);
         node.controller.on('matter:node_added', onNodesChanged);
         node.controller.on('matter:node_updated', onNodesChanged);
+        node.controller.on('matter:nodes_changed', onNodesChanged);
 
         // Initial emit: if the controller is already connected when this node starts (e.g. you just
-        // enabled "Emit metadata" and redeployed), onStatus('connected') won't fire again — so kick
-        // off an emit ourselves once the bridge cache is populated.
-        if (node.emitMeta) {
+        // redeployed), onStatus('connected') won't fire again — so kick off an emit ourselves once
+        // the bridge cache is populated. Alive seeding runs regardless of the metadata opt-in.
+        {
             const b = node.controller.getBridge && node.controller.getBridge();
-            if (b && b.nodes && Object.keys(b.nodes).length) scheduleMetaEmit(3000);
+            if (b && b.nodes && Object.keys(b.nodes).length) {
+                if (node.emitMeta) scheduleMetaEmit(3000);
+                scheduleAliveSeed(2000);
+            }
         }
 
         node.on('close', function () {
@@ -129,7 +173,9 @@ module.exports = function (RED) {
             node.controller.removeListener('matter:error', onError);
             node.controller.removeListener('matter:node_added', onNodesChanged);
             node.controller.removeListener('matter:node_updated', onNodesChanged);
+            node.controller.removeListener('matter:nodes_changed', onNodesChanged);
             if (metaTimer) { clearTimeout(metaTimer); metaTimer = null; }
+            if (aliveSeedTimer) { clearTimeout(aliveSeedTimer); aliveSeedTimer = null; }
         });
 
         node.status({ fill: 'grey', shape: 'ring', text: 'idle' });

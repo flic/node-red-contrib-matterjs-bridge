@@ -12,6 +12,30 @@ module.exports = function (RED) {
             return;
         }
 
+        // Fail fast on commands to an offline/unknown node, with a descriptive error instead of the
+        // matter layer's cryptic timeout. `available` comes from the controller cache, which is
+        // seeded authoritatively by start_listening and kept live via node_updated — i.e. the same
+        // value matterjs-server reports. Reads are left ungated (diagnostic).
+        function assertReachable(bridge, nodeId) {
+            const nodes = bridge.nodes || {};
+            let mn = nodes[nodeId] || nodes[String(nodeId)];
+            if (!mn) {
+                for (const k of Object.keys(nodes)) {
+                    const d = nodes[k] && (nodes[k].data || nodes[k]);
+                    if (d && d.node_id === nodeId) { mn = nodes[k]; break; }
+                }
+            }
+            if (!mn) {
+                const e = new Error(`Matter node ${nodeId} not found in controller cache — command not sent`);
+                e.code = 'node_unknown'; e.source = 'matterjsOut'; throw e;
+            }
+            const data = mn.data || mn;
+            if (!data.available) {
+                const e = new Error(`Matter node ${nodeId} is offline (unreachable) — command not sent`);
+                e.code = 'node_offline'; e.source = 'matterjsOut'; throw e;
+            }
+        }
+
         async function execOne(cmd) {
             const bridge = node.controller.getBridge();
             if (!bridge) throw new Error('matter bridge not ready');
@@ -22,6 +46,7 @@ module.exports = function (RED) {
                 if (nodeId == null || endpoint == null || cluster == null || !command) {
                     throw new Error('device_command missing fields: ' + JSON.stringify(cmd));
                 }
+                assertReachable(bridge, Number(nodeId));
                 return bridge.deviceCommand(Number(nodeId), Number(endpoint), Number(cluster), String(command), args);
             }
 
@@ -30,6 +55,7 @@ module.exports = function (RED) {
                 if (nodeId == null || endpoint == null || cluster == null || attribute == null) {
                     throw new Error('write_attribute missing fields: ' + JSON.stringify(cmd));
                 }
+                assertReachable(bridge, Number(nodeId));
                 const result = await bridge.writeAttribute(Number(nodeId), Number(endpoint), Number(cluster), Number(attribute), value);
                 // Optimistic state-emit so consumer Things react before the device's own push
                 try {
@@ -86,7 +112,7 @@ module.exports = function (RED) {
                     const errMsg = {
                         topic: 'matter/_error',
                         payload: {
-                            type: 'command_failed',
+                            type: e.code || 'command_failed',
                             source: e.source || 'matterjsOut',
                             message: e.message,
                             ts: new Date().toISOString(),

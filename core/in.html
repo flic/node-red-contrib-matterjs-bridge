@@ -10,10 +10,10 @@
             topicFilter: { value: '' },
             nodeIdFilter: { value: '' },
             errorOutput: { value: false },
-            emitMeta: { value: false }
+            emitMeta: { value: false },
+            outputs: { value: 1 }
         },
         inputs: 0,
-        outputs: 1,
         outputLabels: function (i) {
             if (this.errorOutput) return i === 0 ? 'events' : 'errors';
             return 'events';
@@ -30,7 +30,10 @@
             }).trigger('change');
         },
         oneditsave: function () {
-            this.outputs = this.errorOutput ? 2 : 1;
+            // Read the checkbox from the DOM, not this.errorOutput — at this point Node-RED has not
+            // yet copied the form value back to the property, so this.errorOutput is still the OLD
+            // value (which made the output count lag one edit behind the checkbox).
+            this.outputs = $('#node-input-errorOutput').is(':checked') ? 2 : 1;
         }
     });
 </script>
