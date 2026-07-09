@@ -138,6 +138,34 @@ module.exports = function (RED) {
 
         const onNodesChanged = () => { scheduleMetaEmit(1500); emitAliveChanges(); };
 
+        // A decommissioned node never flips `available` — it just vanishes from the cache — so
+        // signal offline explicitly, or downstream Things stay on their last known state forever.
+        const onNodeRemoved = (removed) => {
+            const nodeId = (removed && typeof removed === 'object') ? removed.node_id : Number(removed);
+            if (typeof nodeId !== 'number' || !Number.isFinite(nodeId)) return;
+            lastAvail.delete(nodeId);
+            if (node.format === 'raw') return; // `_alive` is a hal2-format concept
+            // The tap dispatches before the upstream client processes the message, so the cache
+            // usually still holds the node — enumerate its endpoints while we can.
+            const eps = new Set();
+            const b = node.controller.getBridge && node.controller.getBridge();
+            const mn = b && b.nodes && (b.nodes[nodeId] || b.nodes[String(nodeId)]);
+            if (mn) {
+                const data = mn.data || mn;
+                const attrs = data.attributes || mn.attributes || {};
+                for (const k of Object.keys(attrs)) {
+                    const m = k.match(/^(\d+)\/29\/0$/);
+                    if (m && Number(m[1]) !== 0) eps.add(Number(m[1]));
+                }
+            }
+            if (!eps.size) eps.add(1); // fallback so offline is still signalled
+            for (const ep of eps) {
+                const msg = aliveToMsg(nodeId, ep, false);
+                if (!shouldEmit(msg)) continue;
+                if (node.errorOutput) node.send([msg, null]); else node.send(msg);
+            }
+        };
+
         const onError = (errPayload) => {
             if (!node.errorOutput) return;
             const errMsg = {
@@ -153,6 +181,7 @@ module.exports = function (RED) {
         node.controller.on('matter:error', onError);
         node.controller.on('matter:node_added', onNodesChanged);
         node.controller.on('matter:node_updated', onNodesChanged);
+        node.controller.on('matter:node_removed', onNodeRemoved);
         node.controller.on('matter:nodes_changed', onNodesChanged);
 
         // Initial emit: if the controller is already connected when this node starts (e.g. you just
@@ -173,6 +202,7 @@ module.exports = function (RED) {
             node.controller.removeListener('matter:error', onError);
             node.controller.removeListener('matter:node_added', onNodesChanged);
             node.controller.removeListener('matter:node_updated', onNodesChanged);
+            node.controller.removeListener('matter:node_removed', onNodeRemoved);
             node.controller.removeListener('matter:nodes_changed', onNodesChanged);
             if (metaTimer) { clearTimeout(metaTimer); metaTimer = null; }
             if (aliveSeedTimer) { clearTimeout(aliveSeedTimer); aliveSeedTimer = null; }

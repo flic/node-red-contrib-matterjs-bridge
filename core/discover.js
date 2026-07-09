@@ -17,10 +17,13 @@ function buildThingTypeNode(template, baseLibIdMap) {
     function resolveLibId(library, name) {
         const existing = baseLibIdMap.get(name);
         if (existing) return existing;
+        // Only register an id once the function actually exists in the library — registering
+        // first would hand later lookups of the same missing name a dangling id.
+        const fn = library.find(f => f.name === name);
+        if (!fn) return null;
         const id = genId('lib');
         baseLibIdMap.set(name, id);
-        const fn = library.find(f => f.name === name);
-        return fn ? id : null;
+        return id;
     }
 
     const ingressLib = (template.functions && template.functions.ingress) || [];
@@ -68,8 +71,14 @@ function buildThingTypeNode(template, baseLibIdMap) {
         return obj;
     });
 
-    // Always add Alive item bound to the controller's synthetic /_alive/0 topic
-    const aliveIngressId = resolveLibId(ingressLib, 'Pass-through');
+    // Always add Alive item bound to the controller's synthetic /_alive/0 topic.
+    // Synthesise Pass-through into the local library if the template doesn't ship one.
+    let aliveIngressId = resolveLibId(ingressLib, 'Pass-through');
+    if (!aliveIngressId) {
+        aliveIngressId = genId('lib');
+        baseLibIdMap.set('Pass-through', aliveIngressId);
+        ingressList.push({ id: aliveIngressId, name: 'Pass-through', fn: 'return msg.payload;' });
+    }
     items.push({
         name: 'Alive',
         id: '1',
@@ -81,10 +90,6 @@ function buildThingTypeNode(template, baseLibIdMap) {
         ingress: aliveIngressId,
         egress: '',
     });
-    // Make sure Pass-through ends up in the local library if it wasn't already
-    if (aliveIngressId && !ingressList.find(f => f.id === aliveIngressId)) {
-        ingressList.push({ id: aliveIngressId, name: 'Pass-through', fn: 'return msg.payload;' });
-    }
 
     return {
         id: template.id,
@@ -266,11 +271,12 @@ module.exports = function (RED) {
             if (effectiveFormat === 'resync') {
                 const replay = [];
                 for (const key of Object.keys(bridge.nodes)) {
-                    const data = bridge.nodes[key] && (bridge.nodes[key].data || bridge.nodes[key]);
+                    const mn = bridge.nodes[key];
+                    const data = mn && (mn.data || mn);
                     if (!data || typeof data.node_id !== 'number') continue;
                     const nodeId = data.node_id;
                     if (effectiveFilter && String(nodeId) !== effectiveFilter) continue;
-                    const attrs = data.attributes || {};
+                    const attrs = data.attributes || mn.attributes || {};
                     const available = !!data.available;
                     const eps = new Set();
                     for (const k of Object.keys(attrs)) {

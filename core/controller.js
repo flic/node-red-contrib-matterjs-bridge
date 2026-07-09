@@ -8,6 +8,9 @@ module.exports = function (RED) {
     function matterjsController(config) {
         RED.nodes.createNode(this, config);
         const node = this;
+        // Every matterjs-in registers ~7 listeners here; with 10+ in-nodes on one controller the
+        // default EventEmitter cap (10 per event name) triggers MaxListenersExceededWarning.
+        node.setMaxListeners(0);
 
         node.name = config.name;
         node.url = config.url || '${MATTER_WS_URL}';
@@ -19,12 +22,12 @@ module.exports = function (RED) {
         const RECONNECT_CAP_MS = 60000;
         let reconnectDelayMs = RECONNECT_BASE_MS;
 
-        // Resolve env-substitution on url
-        node.resolvedUrl = (() => {
-            const m = String(node.url).match(/^\$\{([A-Z_][A-Z0-9_]*)\}$/i);
-            if (m) return process.env[m[1]] || '';
-            return node.url;
-        })();
+        // Resolve env-substitution on url. Supports both whole-string (`${MATTER_WS_URL}`) and
+        // inline (`ws://${MATTER_HOST}:5580/ws`) references; unset vars resolve to ''.
+        node.resolvedUrl = String(node.url).replace(
+            /\$\{([A-Z_][A-Z0-9_]*)\}/gi,
+            (_, name) => process.env[name] || ''
+        );
 
         // Load templates synchronously at setup
         try {
@@ -72,6 +75,13 @@ module.exports = function (RED) {
                 scheduleReconnect();
                 return;
             }
+            // The node may have been closed while createBridge was in flight — the close handler
+            // saw bridge === null and couldn't stop it, so clean up here instead of leaking the WS.
+            if (shuttingDown) {
+                try { bridge.stop && bridge.stop(); } catch (_) {}
+                bridge = null;
+                return;
+            }
 
             // Forward bridge events to Node-RED EventEmitter on this config node
             bridge.on('attribute_changed', (ev) => node.emit('matter:attribute', ev));
@@ -112,7 +122,15 @@ module.exports = function (RED) {
             node.log(`matterjs controller: scheduling reconnect in ${delay}ms`);
             reconnectTimer = setTimeout(async () => {
                 reconnectTimer = null;
-                try { bridge && bridge.stop && bridge.stop(); } catch (_) {}
+                // Detach our listeners before stopping: disconnect() can make the old client emit
+                // connection_lost, and a stale 'disconnected' handler would schedule yet another
+                // reconnect that tears down the fresh bridge start() is about to create.
+                try {
+                    if (bridge) {
+                        bridge.removeAllListeners();
+                        bridge.stop && bridge.stop();
+                    }
+                } catch (_) {}
                 bridge = null;
                 await start();
             }, delay);
@@ -126,7 +144,10 @@ module.exports = function (RED) {
                 const cluster = Number(p.cluster);
                 const attribute = Number(p.attribute);
                 const intervalMs = Number(p.intervalSeconds || 60) * 1000;
-                if (!isFinite(cluster) || !isFinite(attribute) || !isFinite(intervalMs) || intervalMs < 5000) continue;
+                if (!isFinite(cluster) || !isFinite(attribute) || !isFinite(intervalMs) || intervalMs < 5000) {
+                    node.warn(`matterjs controller: skipping invalid poll config ${JSON.stringify(p)} (cluster/attribute must be numeric, interval >= 5s)`);
+                    continue;
+                }
                 const scope = String(p.scopeFilter || '').trim();
                 const handle = setInterval(() => pollOnce(cluster, attribute, scope), intervalMs);
                 pollHandles.push(handle);
@@ -141,16 +162,21 @@ module.exports = function (RED) {
         async function pollOnce(cluster, attribute, scope) {
             if (!bridge) return;
             const nodes = bridge.nodes || {};
+            const epRe = new RegExp(`^(\\d+)/${cluster}/`);
             for (const key of Object.keys(nodes)) {
                 const matterNode = nodes[key];
-                if (!matterNode || !matterNode.available) continue;
-                const nodeId = matterNode.node_id || matterNode.data?.node_id || Number(key);
-                const attrs = matterNode.attributes || matterNode.data?.attributes || {};
+                if (!matterNode) continue;
+                // Upstream MatterNode wraps `data` — normalise like everywhere else, or
+                // `available` reads undefined and no node ever gets polled.
+                const data = matterNode.data || matterNode;
+                if (!data.available) continue;
+                const nodeId = data.node_id ?? Number(key);
+                const attrs = data.attributes || matterNode.attributes || {};
                 if (scope && String(nodeId) !== scope) continue;
                 // Find all endpoints on this node that expose this cluster
                 const eps = new Set();
                 for (const k of Object.keys(attrs)) {
-                    const m = k.match(new RegExp(`^(\\d+)\\/${cluster}\\/`));
+                    const m = k.match(epRe);
                     if (m) eps.add(Number(m[1]));
                 }
                 for (const ep of eps) {
@@ -179,7 +205,12 @@ module.exports = function (RED) {
             stopPolling();
             if (reconnectTimer) clearTimeout(reconnectTimer);
             reconnectTimer = null;
-            try { bridge && bridge.stop && bridge.stop(); } catch (_) {}
+            try {
+                if (bridge) {
+                    bridge.removeAllListeners();
+                    bridge.stop && bridge.stop();
+                }
+            } catch (_) {}
             bridge = null;
             done && done();
         });

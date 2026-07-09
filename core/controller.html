@@ -150,7 +150,7 @@
         <input type="text" id="node-config-input-url" placeholder="ws://matter.caddy:5580/ws">
     </div>
     <div class="form-tips">
-        URL supports env substitution: <code>${MATTER_WS_URL}</code> is resolved from process.env at startup.
+        URL supports env substitution: <code>${MATTER_WS_URL}</code> (or inline, e.g. <code>ws://${MATTER_HOST}:5580/ws</code>) is resolved from process.env at startup.
     </div>
     <div class="form-row">
         <label for="node-config-input-templatesDir"><i class="fa fa-folder-open"></i> Templates dir</label>
