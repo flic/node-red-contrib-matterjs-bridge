@@ -170,5 +170,5 @@ environment:
 ## Requirements
 
 - Node-RED >= 4.0.0
-- Node.js >= 20.19.0
+- Node.js >= 22.13.0 (required by `@matter-server/ws-client`)
 - `@matter-server/ws-client` ^1.0.0 (official matterjs-server client)

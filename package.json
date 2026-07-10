@@ -16,7 +16,7 @@
   "author": "Fredrik Furtenbach",
   "license": "ISC",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.13.0"
   },
   "node-red": {
     "version": ">=4.0.0",
