@@ -1,0 +1,64 @@
+{
+  "id": "matter_rvc_thingtype",
+  "name": "Matter Robotic Vacuum",
+  "shape": "(1,116)",
+  "nodestatus": "🤖 %On% [%State%] 🔋 %Battery%%",
+  "items": [
+    {
+      "name": "On",
+      "id": "mrvc_on",
+      "endpoint": 1,
+      "cluster": 84,
+      "attr": 1,
+      "haType": "switch",
+      "ingress": "Matter RVC RunMode → bool",
+      "egress": "Matter RVC RunMode Command",
+      "notes": "RvcRunMode CurrentMode (attr 1). Convention: mode 0=Idle, 1=Cleaning. Writing triggers ChangeToMode command."
+    },
+    {
+      "name": "State",
+      "id": "mrvc_state",
+      "endpoint": 1,
+      "cluster": 97,
+      "attr": 4,
+      "haType": "",
+      "ingress": "Matter RVC OperationalState → string",
+      "readOnly": true,
+      "notes": "RvcOperationalState.OperationalState (attr 4). 0=stopped, 1=running, 2=paused, 3=error, 64=seeking_charger, 65=charging, 66=docked."
+    },
+    {
+      "name": "Command",
+      "id": "mrvc_command",
+      "endpoint": 1,
+      "cluster": 97,
+      "attr": 0,
+      "filterValue": "/_command/rvc",
+      "haType": "",
+      "ingress": "Pass-through",
+      "egress": "Matter RVC Command",
+      "notes": "Write-only trigger. Accepts 'pause', 'resume', 'dock' (aliases: 'go_home', 'home'). Dispatches cluster 97 commands."
+    },
+    {
+      "name": "Battery",
+      "id": "mrvc_battery",
+      "endpoint": 1,
+      "cluster": 47,
+      "attr": 12,
+      "haType": "battery",
+      "ingress": "Matter halfpercent → percent",
+      "readOnly": true
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter halfpercent → percent", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(v / 2);" },
+      { "name": "Matter RVC RunMode → bool", "fn": "// RvcRunMode CurrentMode (cluster 84 attr 1). Convention: mode 0 = Idle, 1 = Cleaning.\nconst v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn v === 1;" },
+      { "name": "Matter RVC OperationalState → string", "fn": "// Cluster 97 attr 4 (OperationalState enum) → human-readable string.\nconst v = Number(msg.payload);\nif (!isFinite(v)) return null;\nconst STATES = { 0: 'stopped', 1: 'running', 2: 'paused', 3: 'error', 64: 'seeking_charger', 65: 'charging', 66: 'docked' };\nreturn STATES[v] || `unknown-${v}`;" }
+    ],
+    "egress": [
+      { "name": "Matter RVC RunMode Command", "fn": "// Boolean input toggles RvcRunMode via ChangeToMode command on cluster 84.\n// true → mode 1 (Cleaning), false → mode 0 (Idle). Devices with different mode numbering\n// need a custom template.\nconst tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst on = !!msg.payload;\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 84,\n    command: 'ChangeToMode',\n    args: { newMode: on ? 1 : 0 }\n};\nreturn msg;" },
+      { "name": "Matter RVC Command", "fn": "// String input triggers RvcOperationalState commands on cluster 97.\n// 'pause' → Pause (0), 'resume' → Resume (3), 'dock'/'go_home'/'home' → GoHome (128).\nconst tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst CMD = { pause: 'Pause', resume: 'Resume', dock: 'GoHome', go_home: 'GoHome', home: 'GoHome' };\nconst cmd = CMD[String(msg.payload || '').toLowerCase()];\nif (!cmd) {\n    node.warn('Matter RVC Command: unknown value ' + JSON.stringify(msg.payload));\n    return null;\n}\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 97,\n    command: cmd,\n    args: {}\n};\nreturn msg;" }
+    ]
+  }
+}

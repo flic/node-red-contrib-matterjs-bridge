@@ -15,6 +15,10 @@
   ],
   "author": "Fredrik Furtenbach",
   "license": "ISC",
+  "scripts": {
+    "postpublish": "node --env-file=.env scripts/bsky-announce.js",
+    "test:announce": "node --env-file=.env scripts/bsky-announce.js"
+  },
   "engines": {
     "node": ">=22.13.0"
   },
@@ -28,6 +32,7 @@
     }
   },
   "dependencies": {
+    "@atproto/api": "^0.20.34",
     "@matter-server/ws-client": "^1.0.0"
   }
 }
