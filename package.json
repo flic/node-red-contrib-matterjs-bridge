@@ -1,6 +1,6 @@
 {
   "name": "@frtnbach/node-red-contrib-matterjs-bridge",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Node-RED bridge between matterjs-server (Matter-over-IP controller) and Node-RED flows. Built on the official @matter-server/ws-client.",
   "repository": {
     "type": "git",

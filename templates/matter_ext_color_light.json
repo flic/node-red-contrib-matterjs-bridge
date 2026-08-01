@@ -1,0 +1,92 @@
+{
+  "id": "matter_ext_color_light_thingtype",
+  "name": "Matter Extended Color Light",
+  "shape": "(1,269)",
+  "nodestatus": "💡 %On% (%Brightness%%) 🎨 %Color% 🌡 %ColorTemp%%",
+  "items": [
+    {
+      "name": "On",
+      "id": "mecl_on",
+      "endpoint": 1,
+      "cluster": 6,
+      "attr": 0,
+      "haType": "light",
+      "ingress": "Pass-through",
+      "egress": "Matter OnOff"
+    },
+    {
+      "name": "Brightness",
+      "id": "mecl_brightness",
+      "endpoint": 1,
+      "cluster": 8,
+      "attr": 0,
+      "haType": "dimmer",
+      "ingress": "Matter Level 0-254 → 0-100",
+      "egress": "Matter Level"
+    },
+    {
+      "name": "ColorTemp",
+      "id": "mecl_color_temp",
+      "endpoint": 1,
+      "cluster": 768,
+      "attr": 7,
+      "haType": "color temperature",
+      "ingress": "Matter Mireds → CT %",
+      "egress": "Matter ColorTemp"
+    },
+    {
+      "name": "Hue",
+      "id": "mecl_hue",
+      "endpoint": 1,
+      "cluster": 768,
+      "attr": 0,
+      "haType": "",
+      "ingress": "Matter Hue 0-254 → 0-360",
+      "readOnly": true,
+      "notes": "ColorControl CurrentHue (attr 0), 0-254. Read-only component of the composite Color item; write via Color instead."
+    },
+    {
+      "name": "Saturation",
+      "id": "mecl_saturation",
+      "endpoint": 1,
+      "cluster": 768,
+      "attr": 1,
+      "haType": "",
+      "ingress": "Matter Level 0-254 → 0-100",
+      "readOnly": true,
+      "notes": "ColorControl CurrentSaturation (attr 1), 0-254 (mapped to 0-100 %). Read-only component of the composite Color item; write via Color instead."
+    },
+    {
+      "name": "Color",
+      "id": "mecl_color",
+      "endpoint": 1,
+      "cluster": 768,
+      "attr": 0,
+      "topicFilters": [
+        { "field": "topic", "matchType": "StrEnd", "value": "/768/0" },
+        { "field": "topic", "matchType": "StrEnd", "value": "/768/1" },
+        { "field": "topic", "matchType": "StrEnd", "value": "/8/0" }
+      ],
+      "topicFilterMode": "or",
+      "haType": "color",
+      "ingress": "Matter Compose Color H,S,B",
+      "egress": "Matter HSB Color",
+      "notes": "Composite of Hue, Saturation and Brightness as 'H,S,B' string. Writes dispatch MoveToHueAndSaturation + MoveToLevelWithOnOff on the underlying clusters."
+    }
+  ],
+  "functions": {
+    "ingress": [
+      { "name": "Pass-through", "fn": "return msg.payload;" },
+      { "name": "Matter Level 0-254 → 0-100", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(Math.max(0, Math.min(254, v)) * 100 / 254);" },
+      { "name": "Matter Mireds → CT %", "fn": "// CT in mireds -> Kelvin -> 0-100% (100=2700K warmest, 0=6500K coolest)\nconst m = Number(msg.payload);\nif (!isFinite(m) || m <= 0) return null;\nconst K = 1e6 / m;\nconst pct = Math.round(Math.max(0, Math.min(100, (6500 - K) / (6500 - 2700) * 100)));\nreturn pct;" },
+      { "name": "Matter Hue 0-254 → 0-360", "fn": "const v = Number(msg.payload);\nif (!isFinite(v)) return null;\nreturn Math.round(Math.max(0, Math.min(254, v)) * 360 / 254);" },
+      { "name": "Matter Compose Color H,S,B", "fn": "// Fires on ColorControl attr 0/1 or LevelControl attr 0 updates. Reads sibling item state\n// (already updated by their own ingress) and composes the H,S,B string hal2 uses for 'color'.\nconst tm = String(msg.topic || '').match(/^matter\\/\\d+\\/\\d+\\/(\\d+)\\/(\\d+)$/);\nif (!tm) return null;\nconst c = tm[1], a = tm[2];\nconst relevant = (c === '768' && (a === '0' || a === '1')) || (c === '8' && a === '0');\nif (!relevant) return null;\nconst H = (typeof item['Hue'] === 'number') ? item['Hue'] : 0;\nconst S = (typeof item['Saturation'] === 'number') ? item['Saturation'] : 0;\nconst B = (typeof item['Brightness'] === 'number') ? item['Brightness'] : 0;\nreturn `${H},${S},${B}`;" }
+    ],
+    "egress": [
+      { "name": "Matter OnOff", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 6,\n    command: msg.payload ? 'On' : 'Off'\n};\nreturn msg;" },
+      { "name": "Matter Level", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\n// Accept booleans as a convenience: true=100%, false=0% (turns light off via OnOff cluster).\nlet pct;\nif (typeof msg.payload === 'boolean') {\n    pct = msg.payload ? 100 : 0;\n} else {\n    pct = Math.max(0, Math.min(100, Number(msg.payload) || 0));\n}\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 8,\n    command: 'MoveToLevelWithOnOff',\n    args: { level: Math.round(pct * 254 / 100), transitionTime: 0, optionsMask: 0, optionsOverride: 0 }\n};\nreturn msg;" },
+      { "name": "Matter ColorTemp", "fn": "const tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst pct = Math.max(0, Math.min(100, Number(msg.payload) || 0));\nconst K = 6500 - pct / 100 * (6500 - 2700);\nconst mireds = Math.max(153, Math.min(555, Math.round(1e6 / K)));\nmsg.payload = {\n    nodeId: Number(tm[1]),\n    endpoint: Number(tm[2]),\n    cluster: 768,\n    command: 'MoveToColorTemperature',\n    args: { colorTemperatureMireds: mireds, transitionTime: 0, optionsMask: 0, optionsOverride: 0 }\n};\nreturn msg;" },
+      { "name": "Matter HSB Color", "fn": "// Accepts 'H,S,B' string (H 0-360, S 0-100, B 0-100). Dispatches both\n// MoveToHueAndSaturation (cluster 768) and MoveToLevelWithOnOff (cluster 8).\nconst tm = String(msg.topic || '').match(/^matter\\/(\\d+)\\/(\\d+)/);\nif (!tm) return null;\nconst nodeId = Number(tm[1]), endpoint = Number(tm[2]);\nconst parts = String(msg.payload || '').split(',').map(s => Number(String(s).trim()));\nif (parts.length < 3 || !parts.every(isFinite)) {\n    return null;\n}\nconst [H, S, B] = parts;\nconst hue = Math.round(Math.max(0, Math.min(360, H)) * 254 / 360);\nconst sat = Math.round(Math.max(0, Math.min(100, S)) * 254 / 100);\nconst level = Math.round(Math.max(0, Math.min(100, B)) * 254 / 100);\nmsg.payload = [\n    { nodeId, endpoint, cluster: 768, command: 'MoveToHueAndSaturation', args: { hue, saturation: sat, transitionTime: 0, optionsMask: 0, optionsOverride: 0 } },\n    { nodeId, endpoint, cluster: 8, command: 'MoveToLevelWithOnOff', args: { level, transitionTime: 0, optionsMask: 0, optionsOverride: 0 } }\n];\nreturn msg;" }
+    ]
+  }
+}
