@@ -289,6 +289,7 @@ module.exports = function (RED) {
                         const m = k.match(/^(\d+)\/29\/0$/);
                         if (m && Number(m[1]) !== 0) eps.add(Number(m[1]));
                     }
+                    if (!eps.size) eps.add(1); // same fallback as in.js — offline must still be signalled
                     for (const ep of eps) replay.push(aliveToMsg(nodeId, ep, available));
                     // Real attribute values — skip global attrs/clusters (>= 0xFFF8: AttributeList etc).
                     for (const k of Object.keys(attrs)) {
