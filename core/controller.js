@@ -24,10 +24,17 @@ module.exports = function (RED) {
         let reconnectDelayMs = RECONNECT_BASE_MS;
 
         // Resolve env-substitution on url. Supports both whole-string (`${MATTER_WS_URL}`) and
-        // inline (`ws://${MATTER_HOST}:5580/ws`) references; unset vars resolve to ''.
+        // inline (`ws://${MATTER_HOST}:5580/ws`) references; unset vars resolve to '' with a
+        // warning — process.env is case-sensitive, so ${matter_ws_url} naming MATTER_WS_URL
+        // is a silent empty string without it.
         node.resolvedUrl = String(node.url).replace(
             /\$\{([A-Z_][A-Z0-9_]*)\}/gi,
-            (_, name) => process.env[name] || ''
+            (_, name) => {
+                if (process.env[name] === undefined) {
+                    node.warn(`env var "${name}" is not set (names are case-sensitive) — substituting empty string`);
+                }
+                return process.env[name] || '';
+            }
         );
 
         // Load templates synchronously at setup
