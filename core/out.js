@@ -1,5 +1,7 @@
 'use strict';
 
+const { unwrapNode } = require('../lib/normalize');
+
 module.exports = function (RED) {
     function matterjsOut(config) {
         RED.nodes.createNode(this, config);
@@ -18,19 +20,18 @@ module.exports = function (RED) {
         // value matterjs-server reports. Reads are left ungated (diagnostic).
         function assertReachable(bridge, nodeId) {
             const nodes = bridge.nodes || {};
-            let mn = nodes[nodeId] || nodes[String(nodeId)];
-            if (!mn) {
+            let flat = unwrapNode(nodes[nodeId] || nodes[String(nodeId)]);
+            if (!flat) {
                 for (const k of Object.keys(nodes)) {
-                    const d = nodes[k] && (nodes[k].data || nodes[k]);
-                    if (d && d.node_id === nodeId) { mn = nodes[k]; break; }
+                    const d = unwrapNode(nodes[k], k);
+                    if (d && d.node_id === nodeId) { flat = d; break; }
                 }
             }
-            if (!mn) {
+            if (!flat) {
                 const e = new Error(`Matter node ${nodeId} not found in controller cache — command not sent`);
                 e.code = 'node_unknown'; e.source = 'matterjsOut'; throw e;
             }
-            const data = mn.data || mn;
-            if (!data.available) {
+            if (!flat.available) {
                 const e = new Error(`Matter node ${nodeId} is offline (unreachable) — command not sent`);
                 e.code = 'node_offline'; e.source = 'matterjsOut'; throw e;
             }

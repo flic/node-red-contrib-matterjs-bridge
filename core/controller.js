@@ -3,6 +3,7 @@
 const { createBridge } = require('../lib/matter-client');
 const { loadTemplates, buildShapeIndex } = require('../lib/templates');
 const { buildInventory } = require('../lib/inventory');
+const { unwrapNode } = require('../lib/normalize');
 
 module.exports = function (RED) {
     function matterjsController(config) {
@@ -164,14 +165,10 @@ module.exports = function (RED) {
             const nodes = bridge.nodes || {};
             const epRe = new RegExp(`^(\\d+)/${cluster}/`);
             for (const key of Object.keys(nodes)) {
-                const matterNode = nodes[key];
-                if (!matterNode) continue;
-                // Upstream MatterNode wraps `data` — normalise like everywhere else, or
-                // `available` reads undefined and no node ever gets polled.
-                const data = matterNode.data || matterNode;
-                if (!data.available) continue;
-                const nodeId = data.node_id ?? Number(key);
-                const attrs = data.attributes || matterNode.attributes || {};
+                const flat = unwrapNode(nodes[key], key);
+                if (!flat || !flat.available) continue;
+                const nodeId = flat.node_id;
+                const attrs = flat.attributes;
                 if (scope && String(nodeId) !== scope) continue;
                 // Find all endpoints on this node that expose this cluster
                 const eps = new Set();

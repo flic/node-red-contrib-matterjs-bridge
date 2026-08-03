@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const { computeShape, extractIdentity } = require('../lib/shape');
 const { buildInventory } = require('../lib/inventory');
-const { attributeToMsg, aliveToMsg } = require('../lib/normalize');
+const { attributeToMsg, aliveToMsg, unwrapNode } = require('../lib/normalize');
 
 const VALID_FORMATS = new Set(['hal2', 'summary', 'node', 'inventory', 'resync']);
 
@@ -171,8 +171,8 @@ function resolveFilter(node, bridge, raw) {
         let bestId = null;
         let bestTs = -Infinity;
         for (const key of Object.keys(nodes)) {
-            const data = (nodes[key] && nodes[key].data) || nodes[key];
-            if (!data || typeof data.node_id !== 'number') continue;
+            const data = unwrapNode(nodes[key]);
+            if (!data) continue;
             const ts = data.date_commissioned ? Date.parse(data.date_commissioned) : NaN;
             if (Number.isFinite(ts) && ts > bestTs) {
                 bestTs = ts;
@@ -271,13 +271,12 @@ module.exports = function (RED) {
             if (effectiveFormat === 'resync') {
                 const replay = [];
                 for (const key of Object.keys(bridge.nodes)) {
-                    const mn = bridge.nodes[key];
-                    const data = mn && (mn.data || mn);
-                    if (!data || typeof data.node_id !== 'number') continue;
-                    const nodeId = data.node_id;
+                    const flat = unwrapNode(bridge.nodes[key]);
+                    if (!flat) continue;
+                    const nodeId = flat.node_id;
                     if (effectiveFilter && String(nodeId) !== effectiveFilter) continue;
-                    const attrs = data.attributes || mn.attributes || {};
-                    const available = !!data.available;
+                    const attrs = flat.attributes;
+                    const available = !!flat.available;
                     const eps = new Set();
                     for (const k of Object.keys(attrs)) {
                         const m = k.match(/^(\d+)\/29\/0$/);
@@ -315,17 +314,8 @@ module.exports = function (RED) {
             const rawNodes = [];
 
             for (const key of Object.keys(nodes)) {
-                const matterNode = nodes[key];
-                if (!matterNode) continue;
-                // normalise — upstream MatterNode wraps `data` and exposes attributes getter
-                const data = matterNode.data || matterNode;
-                const matterNodeFlat = {
-                    node_id: data.node_id,
-                    attributes: data.attributes || matterNode.attributes || {},
-                    available: data.available,
-                    date_commissioned: data.date_commissioned,
-                };
-                if (typeof matterNodeFlat.node_id !== 'number') continue;
+                const matterNodeFlat = unwrapNode(nodes[key]);
+                if (!matterNodeFlat) continue;
                 if (effectiveFilter && String(matterNodeFlat.node_id) !== effectiveFilter) continue;
 
                 const shape = computeShape(matterNodeFlat);

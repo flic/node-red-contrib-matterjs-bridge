@@ -1,6 +1,6 @@
 'use strict';
 
-const { attributeToMsg, nodeEventToMsg, aliveToMsg, topicMatches } = require('../lib/normalize');
+const { attributeToMsg, nodeEventToMsg, aliveToMsg, topicMatches, unwrapNode } = require('../lib/normalize');
 const { buildInventory, formatModel } = require('../lib/inventory');
 
 module.exports = function (RED) {
@@ -76,16 +76,14 @@ module.exports = function (RED) {
             const b = node.controller.getBridge && node.controller.getBridge();
             if (!b || !b.nodes) return;
             for (const key of Object.keys(b.nodes)) {
-                const mn = b.nodes[key];
-                if (!mn) continue;
-                const data = mn.data || mn;
-                const nodeId = data.node_id;
-                if (typeof nodeId !== 'number') continue;
+                const flat = unwrapNode(b.nodes[key]);
+                if (!flat) continue;
+                const nodeId = flat.node_id;
                 if (node.nodeIdFilter && String(nodeId) !== node.nodeIdFilter) continue;
-                const available = !!data.available;
+                const available = !!flat.available;
                 if (lastAvail.get(nodeId) === available) continue; // no change
                 lastAvail.set(nodeId, available);
-                const attrs = data.attributes || mn.attributes || {};
+                const attrs = flat.attributes;
                 const eps = new Set();
                 for (const k of Object.keys(attrs)) {
                     const m = k.match(/^(\d+)\/29\/0$/);
@@ -150,10 +148,9 @@ module.exports = function (RED) {
             const eps = new Set();
             const b = node.controller.getBridge && node.controller.getBridge();
             const mn = b && b.nodes && (b.nodes[nodeId] || b.nodes[String(nodeId)]);
-            if (mn) {
-                const data = mn.data || mn;
-                const attrs = data.attributes || mn.attributes || {};
-                for (const k of Object.keys(attrs)) {
+            const flat = unwrapNode(mn, nodeId);
+            if (flat) {
+                for (const k of Object.keys(flat.attributes)) {
                     const m = k.match(/^(\d+)\/29\/0$/);
                     if (m && Number(m[1]) !== 0) eps.add(Number(m[1]));
                 }
