@@ -129,10 +129,12 @@ module.exports = function (RED) {
 
         const onStatus = (s) => {
             try { node.status(s); } catch (_) {}
-            // Re-publish metadata + re-seed alive state once the controller (re)connects — the
-            // cache is freshly populated by startListening (slightly delayed so it has settled).
-            if (s && s.text === 'connected') { scheduleMetaEmit(2500); scheduleAliveSeed(1500); }
         };
+
+        // Re-publish metadata + re-seed alive state once the controller (re)connects — the
+        // cache is freshly populated by startListening (slightly delayed so it has settled).
+        // A dedicated lifecycle event, not the status text: statuses are for humans.
+        const onConnected = () => { scheduleMetaEmit(2500); scheduleAliveSeed(1500); };
 
         const onNodesChanged = () => { scheduleMetaEmit(1500); emitAliveChanges(); };
 
@@ -175,6 +177,7 @@ module.exports = function (RED) {
         node.controller.on('matter:attribute', onAttribute);
         node.controller.on('matter:nodeevent', onNodeEvent);
         node.controller.on('matter:status', onStatus);
+        node.controller.on('matter:connected', onConnected);
         node.controller.on('matter:error', onError);
         node.controller.on('matter:node_added', onNodesChanged);
         node.controller.on('matter:node_updated', onNodesChanged);
@@ -196,6 +199,7 @@ module.exports = function (RED) {
             node.controller.removeListener('matter:attribute', onAttribute);
             node.controller.removeListener('matter:nodeevent', onNodeEvent);
             node.controller.removeListener('matter:status', onStatus);
+            node.controller.removeListener('matter:connected', onConnected);
             node.controller.removeListener('matter:error', onError);
             node.controller.removeListener('matter:node_added', onNodesChanged);
             node.controller.removeListener('matter:node_updated', onNodesChanged);

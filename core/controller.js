@@ -95,6 +95,8 @@ module.exports = function (RED) {
             bridge.on('error', (e) => emitError('bridge_error', e, e && e.source));
             bridge.on('connected', () => {
                 setStatus('green', 'dot', 'connected');
+                // Dedicated lifecycle event — consumers must not have to sniff status text.
+                try { node.emit('matter:connected'); } catch (_) {}
                 reconnectDelayMs = RECONNECT_BASE_MS; // reset backoff on successful connect
                 startPolling();
             });
