@@ -1,6 +1,11 @@
 # Local agent / editor config
 .claude/
+.entire/
 .vscode/
+
+# Tests and CI — repo-only, not part of the package
+test/
+.github/
 
 # Runtime / dev artifacts
 *.tgz
