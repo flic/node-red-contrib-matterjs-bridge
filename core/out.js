@@ -97,9 +97,11 @@ module.exports = function (RED) {
             }
             const cmds = Array.isArray(payload) ? payload : [payload];
             const results = [];
+            let failedIndex = -1;
             try {
-                for (const cmd of cmds) {
-                    const r = await execOne(cmd);
+                for (let i = 0; i < cmds.length; i++) {
+                    failedIndex = i;
+                    const r = await execOne(cmds[i]);
                     results.push(r);
                 }
                 msg.payload = results.length === 1 ? results[0] : results;
@@ -109,6 +111,9 @@ module.exports = function (RED) {
                 done && done();
             } catch (e) {
                 node.status({ fill: 'red', shape: 'dot', text: 'error' });
+                // Commands before the failing one have already been sent and cannot be
+                // recalled — an array abort must say how far it got, or the caller re-sends
+                // commands that already took effect.
                 if (node.errorOutput) {
                     const errMsg = {
                         topic: 'matter/_error',
@@ -117,12 +122,18 @@ module.exports = function (RED) {
                             source: e.source || 'matterjsOut',
                             message: e.message,
                             ts: new Date().toISOString(),
+                            failed_index: failedIndex,
+                            completed: results.length,
+                            results,
                         },
                         originalPayload: payload,
                     };
                     send([null, errMsg]);
                     done && done();
                 } else {
+                    if (cmds.length > 1) {
+                        e.message += ` (command ${failedIndex + 1} of ${cmds.length}; ${results.length} already sent)`;
+                    }
                     done && done(e);
                 }
             }
