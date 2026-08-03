@@ -29,7 +29,6 @@ module.exports = function (RED) {
             metaTimer = null;
             buildInventory(node.controller, { readMissingNetwork: true }).then((inv) => {
                 for (const e of inv) {
-                    if (node.nodeIdFilter && String(e.node_id) !== node.nodeIdFilter) continue;
                     // hal2 merges this object into the Thing's metadata; null values prune stale
                     // keys (so a device that loses e.g. its IPv4 clears that key on next emit).
                     const meta = {
@@ -50,6 +49,9 @@ module.exports = function (RED) {
                         payload: meta,
                         matter: { nodeId: e.node_id, kind: 'meta' },
                     };
+                    // Same gate as attribute/alive traffic — a topic-filtered in-node must not
+                    // leak _meta for nodes its filter excludes.
+                    if (!shouldEmit(msg)) continue;
                     if (node.errorOutput) node.send([msg, null]); else node.send(msg);
                 }
             }).catch(() => { /* non-fatal */ });
