@@ -142,15 +142,22 @@ function buildThingNode(matterNode, template, eventHandlerId, shape) {
     };
 }
 
-function resolveEventHandlerId(RED, explicitId) {
+function resolveEventHandlerId(RED, explicitId, warn) {
     if (explicitId) return explicitId;
-    let found = '';
+    const found = [];
     try {
         RED.nodes.eachNode(function (n) {
-            if (!found && n && n.type === 'hal2EventHandler') found = n.id;
+            if (n && n.type === 'hal2EventHandler') found.push({ id: n.id, name: n.name || n.id });
         });
     } catch (_) { /* eachNode unavailable — fall through */ }
-    return found;
+    // Multiple handlers (e.g. one per location) with no explicit choice: picking the first is
+    // a coin toss that silently wires Things to the wrong location. Say so — loudly.
+    if (found.length > 1 && typeof warn === 'function') {
+        warn('discover: ' + found.length + ' hal2EventHandlers exist ('
+            + found.map(h => h.name).join(', ') + ') and no eventHandlerId was set — using "'
+            + found[0].name + '". Set eventHandlerId (config or msg) to pick explicitly.');
+    }
+    return found.length ? found[0].id : '';
 }
 
 /**
@@ -301,7 +308,7 @@ module.exports = function (RED) {
                 return;
             }
 
-            const ehId = resolveEventHandlerId(RED, effectiveEhConfig);
+            const ehId = resolveEventHandlerId(RED, effectiveEhConfig, m => node.warn(m));
 
             const nodes = bridge.nodes;
             const templates = node.controller.getTemplates();
