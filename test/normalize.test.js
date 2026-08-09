@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert');
-const { unwrapNode, attributeToMsg, nodeEventToMsg, aliveToMsg, topicMatches } = require('../lib/normalize');
+const { attributePath, unwrapNode, attributeToMsg, nodeEventToMsg, aliveToMsg, topicMatches } = require('../lib/normalize');
 
 describe('lib/normalize unwrapNode', function () {
     // The one place that knows the upstream cache holds either flat objects or
@@ -84,5 +84,20 @@ describe('lib/normalize topicMatches', function () {
 
     it('requires equal depth when no # is present', function () {
         assert.strictEqual(topicMatches('matter/1/1/6/0/extra', 'matter/1/1/6/0'), false);
+    });
+});
+
+
+describe('lib/normalize attributePath', function () {
+    // The ws-client takes one string; the nodes take three fields. Passing the three
+    // positionally instead put the endpoint where the path belongs, and read_attribute came
+    // back as "path.split is not a function" — the client had a number where it wanted a path.
+    it('joins the three parts the way the client addresses an attribute', function () {
+        assert.strictEqual(attributePath(1, 1030, 48), '1/1030/48');
+        assert.strictEqual(attributePath(0, 51, 0), '0/51/0');
+    });
+
+    it('accepts the parts as strings, since a message carries whatever the flow put there', function () {
+        assert.strictEqual(attributePath('1', '1030', '48'), '1/1030/48');
     });
 });

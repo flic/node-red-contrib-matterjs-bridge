@@ -1,6 +1,6 @@
 'use strict';
 
-const { unwrapNode } = require('../lib/normalize');
+const { unwrapNode, attributePath } = require('../lib/normalize');
 
 module.exports = function (RED) {
     function matterjsOut(config) {
@@ -57,7 +57,7 @@ module.exports = function (RED) {
                     throw new Error('write_attribute missing fields: ' + JSON.stringify(cmd));
                 }
                 assertReachable(bridge, Number(nodeId));
-                const result = await bridge.writeAttribute(Number(nodeId), Number(endpoint), Number(cluster), Number(attribute), value);
+                const result = await bridge.writeAttribute(Number(nodeId), attributePath(endpoint, cluster, attribute), value);
                 // Optimistic state-emit so consumer Things react before the device's own push
                 try {
                     node.controller.emit('matter:attribute', {
@@ -76,7 +76,7 @@ module.exports = function (RED) {
                 if (nodeId == null || endpoint == null || cluster == null || attribute == null) {
                     throw new Error('read_attribute missing fields: ' + JSON.stringify(cmd));
                 }
-                return bridge.readAttribute(Number(nodeId), Number(endpoint), Number(cluster), Number(attribute));
+                return bridge.readAttribute(Number(nodeId), attributePath(endpoint, cluster, attribute));
             }
 
             throw new Error('Unknown kind: ' + kind);
